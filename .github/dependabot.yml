@@ -1,0 +1,11 @@
+version: 2
+updates:
+  # Track Docker base images (Dockerfile) and compose image references (docker-compose.yaml)
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "08:00"
+    labels:
+      - dependencies
