@@ -1,9 +1,11 @@
-FROM node:25-alpine
+FROM node:25-bookworm-slim
 
 # Install curl (used by the Docker health check) and create a non-root user
-RUN apk add --no-cache curl \
-    && addgroup -S opencode \
-    && adduser -S -G opencode opencode
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --system opencode \
+    && useradd --system --gid opencode --create-home --home-dir /home/opencode opencode
 
 # Install opencode-ai globally (pinned for reproducibility) and clean the npm cache
 RUN npm install -g opencode-ai@1.14.24 && npm cache clean --force
