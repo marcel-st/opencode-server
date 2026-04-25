@@ -148,6 +148,8 @@ docker compose ps
 
 ### 6 — Connect from your laptop
 
+#### Direct connection (no reverse proxy)
+
 ```bash
 opencode attach http://<username>:<password>@<remote-host>:4096
 ```
@@ -159,6 +161,42 @@ Example:
 ```bash
 opencode attach http://opencode:s3cr3t@192.168.1.100:4096
 ```
+
+#### Connection through an HTTPS reverse proxy (e.g. Nginx Proxy Manager)
+
+If you front the opencode server with an HTTPS reverse proxy, two things are
+required:
+
+**1. Use the `https://` URL — omit the port (443 is the HTTPS default):**
+
+```bash
+opencode attach https://<username>:<password>@<your-domain>
+```
+
+Example:
+```bash
+opencode attach https://opencode:s3cr3t@opencode.example.com
+```
+
+**2. Configure your proxy for SSE (Server-Sent Events).**
+
+`opencode attach` drives the TUI through a long-lived SSE stream
+(`/event`). Nginx buffers responses by default, which breaks this
+connection. In **Nginx Proxy Manager**, open the proxy host for opencode,
+go to the **Advanced** tab, and add the following to the *Custom Nginx
+Configuration* field:
+
+```nginx
+proxy_buffering         off;
+proxy_cache             off;
+proxy_read_timeout      86400s;
+proxy_send_timeout      86400s;
+proxy_set_header        Connection '';
+proxy_http_version      1.1;
+```
+
+> Also enable the **WebSockets Support** toggle on the Details tab —
+> some opencode IDE plugins communicate over WebSockets in addition to SSE.
 
 Once connected, you drive opencode exactly as you would locally — it runs on
 the remote host and uses the GPU-backed ollama instance for inference.
