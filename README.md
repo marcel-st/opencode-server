@@ -100,7 +100,7 @@ OPENCODE_SERVER_PASSWORD='changeme'        # ← change me (use a strong passwor
 ### 4 — Choose a model
 
 Edit `config/opencode.json` to set the model you want to use (the default is
-`gemma4:e4b`).
+`codellama:7b`).
 
 Once you have settled on a model, build the image (which bakes the
 configuration in) and start the ollama service so you can pull the model
@@ -112,22 +112,24 @@ docker compose build
 
 # Start only the ollama service (the other services are not started yet)
 docker compose up -d ollama
-docker compose exec ollama ollama pull gemma4:e4b
+docker compose exec ollama ollama pull codellama:7b
 ```
 
 Popular coding models available on [ollama.com/library](https://ollama.com/library):
 
 | Model | VRAM | Tool calling | Notes |
 |-------|------|--------------|-------|
-| `gemma4:e4b` | ~8 GB | ✅ Reliable | Default — executes web search tools correctly |
+| `codellama:7b` | ~4 GB | ✅ Reliable | Default — coding-focused, standard tool calling |
+| `gemma4:e4b` | ~8 GB | ❌ Google API only | Hardcoded to call `google:search` with no args; unusable for web tools |
 | `qwen2.5-coder:7b` | ~8 GB | ⚠️ Pseudo-calls | Outputs tool call JSON as text instead of executing |
 | `qwen2.5-coder:14b` | ~16 GB | ⚠️ Pseudo-calls | Better code quality but same tool-call limitation |
 | `deepseek-coder-v2:16b` | ~20 GB | ✅ Generally good | Strong reasoning |
 
-> **Tool calling note:** Qwen 2.5 Coder models do not reliably execute tools
-> through the Ollama API — they output raw JSON text instead of invoking the
-> tool. Gemma 4 and DeepSeek Coder v2 make proper tool calls and are
-> recommended if you need web search or fetch functionality.
+> **Tool calling note:** Qwen 2.5 Coder models output raw JSON pseudo-calls
+> instead of invoking tools. Gemma 4 is fine-tuned on Google's proprietary
+> tool API and always calls `google:search` with no arguments regardless of
+> available tools. Code Llama and DeepSeek Coder use standard Ollama tool
+> calling and are recommended.
 
 ### 5 — Start the full stack
 
@@ -268,7 +270,7 @@ The relevant fields are:
       }
     }
   },
-  "model": "ollama/gemma4:e4b"              // default model (provider/model-tag)
+  "model": "ollama/codellama:7b"            // default model (provider/model-tag)
 }
 ```
 
