@@ -12,32 +12,61 @@ The stack is:
 | **ollama** | Local LLM runtime with NVIDIA GPU pass-through |
 | **open-webui** | Browser UI for chatting with and managing ollama models |
 
+> **Architecture note:** `docker compose` is executed from your **local
+> laptop**.  The Docker daemon (and therefore all containers) run on the
+> **remote server**.  Only the `.env` file and this repository need to exist
+> locally — no files are bind-mounted from the remote host's filesystem at
+> runtime (the opencode configuration is baked into the Docker image at build
+> time).
+
 ---
 
 ## Prerequisites
 
 **Remote host**
-- Docker ≥ 24 and Docker Compose v2
+- Docker ≥ 24 with the Docker daemon accessible over SSH or TCP
 - NVIDIA GPU with the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) installed  
   *(remove the `deploy` block from `docker-compose.yaml` if no GPU is available)*
 
 **Laptop**
+- Docker CLI with Compose v2 (`docker compose`)
 - [opencode CLI](https://opencode.ai) installed (`npm i -g opencode-ai` or see the [install docs](https://opencode.ai/docs))
+- SSH access to the remote host (recommended transport for the Docker context)
 
 ---
 
 ## Quick Start
 
-### 1 — Clone the repo on the remote host
+### 1 — Clone the repo on your laptop
 
 ```bash
 git clone https://github.com/marcel-st/opencode-server.git
 cd opencode-server
 ```
 
-### 2 — Set credentials
+### 2 — Create a Docker context pointing to the remote host
 
-Create your `.env` file from the provided template and set strong, unique credentials:
+This tells the Docker CLI to send all commands to the remote Docker daemon
+instead of the local one.
+
+```bash
+# Replace user@<remote-host> with your actual SSH user and hostname/IP
+docker context create remote \
+  --docker "host=ssh://user@<remote-host>"
+
+# Activate the context for the current shell session
+docker context use remote
+```
+
+> **Tip:** Add `export DOCKER_CONTEXT=remote` to your shell profile so the
+> context is always active, or prefix every `docker` command with
+> `DOCKER_CONTEXT=remote docker …` if you want to keep the default context
+> unchanged.
+
+### 3 — Set credentials
+
+Create your `.env` file from the provided template and set strong, unique
+credentials:
 
 ```bash
 cp .env.example .env
@@ -50,22 +79,29 @@ OPENCODE_SERVER_USERNAME=opencode   # ← change me
 OPENCODE_SERVER_PASSWORD=changeme   # ← change me (use a strong password!)
 ```
 
-> **Note:** `.env` is listed in `.gitignore` and will never be committed to version control.
+> **Note:** `.env` is listed in `.gitignore` and will never be committed to
+> version control.  It is read by `docker compose` on your laptop; the
+> resolved values are passed as environment variables to the containers on
+> the remote host — the file itself never leaves your machine.
 
-### 3 — Choose a model
+### 4 — Choose a model
 
-Pull a model suitable for coding. `qwen2.5-coder:7b` is a good default for
-machines with ≥8 GB VRAM; larger variants perform better on more powerful GPUs.
+Edit `config/opencode.json` and the `OPENCODE_DEFAULT_MODEL` value in
+`docker-compose.yaml` to set the model you want to use (the default is
+`qwen2.5-coder:7b`).
+
+Once you have settled on a model, build the image (which bakes the
+configuration in) and start the ollama service so you can pull the model
+before bringing up the rest of the stack:
 
 ```bash
-# Start only ollama first so you can pull models before the full stack starts
+# Build the opencode image on the remote host
+docker compose build
+
+# Start only the ollama service (the other services are not started yet)
 docker compose up -d ollama
 docker compose exec ollama ollama pull qwen2.5-coder:7b
 ```
-
-Update `OPENCODE_DEFAULT_MODEL` in `docker-compose.yaml` and `model` in
-`config/opencode.json` to match the tag you pulled, e.g.
-`ollama/qwen2.5-coder:7b`.
 
 Popular coding models available on [ollama.com/library](https://ollama.com/library):
 
@@ -76,13 +112,13 @@ Popular coding models available on [ollama.com/library](https://ollama.com/libra
 | `codellama:13b` | ~16 GB | Good code completion |
 | `deepseek-coder-v2:16b` | ~20 GB | Strong reasoning |
 
-### 4 — Start the full stack
+### 5 — Start the full stack
 
 ```bash
 docker compose up -d
 ```
 
-Services and their default ports:
+Services and their default ports (on the **remote host**):
 
 | Service | Port | Binding | Notes |
 |---------|------|---------|-------|
@@ -90,7 +126,7 @@ Services and their default ports:
 | open-webui | `3000` | `127.0.0.1` | Access via SSH tunnel (see below) |
 | ollama API | *(internal)* | Docker network only | Not published to the host |
 
-### 5 — Connect from your laptop
+### 6 — Connect from your laptop
 
 ```bash
 opencode attach http://<username>:<password>@<remote-host>:4096
@@ -107,10 +143,10 @@ opencode attach http://opencode:s3cr3t@192.168.1.100:4096
 Once connected, you drive opencode exactly as you would locally — it runs on
 the remote host and uses the GPU-backed ollama instance for inference.
 
-### 6 — Access Open WebUI (optional)
+### 7 — Access Open WebUI (optional)
 
-Open WebUI is bound to `127.0.0.1` on the remote host for security. To open
-it in your local browser, forward the port over SSH:
+Open WebUI is bound to `127.0.0.1` on the **remote host** for security. To
+open it in your local browser, forward the port over SSH:
 
 ```bash
 ssh -L 3000:localhost:3000 user@<remote-host>
@@ -125,14 +161,23 @@ create an admin account on first visit.
 
 ### Credentials
 
-Credentials are read from the `.env` file (see `.env.example`). Copy the
-example file and set `OPENCODE_SERVER_USERNAME` and `OPENCODE_SERVER_PASSWORD`
-before starting the stack. If `OPENCODE_SERVER_PASSWORD` is not set the server
-starts **without authentication** (a warning is printed to the logs).
+Credentials are read from the `.env` file on your laptop (see `.env.example`).
+Copy the example file and set `OPENCODE_SERVER_USERNAME` and
+`OPENCODE_SERVER_PASSWORD` before starting the stack. If
+`OPENCODE_SERVER_PASSWORD` is not set the server starts **without
+authentication** (a warning is printed to the logs).
 
 ### Provider / model
 
-`config/opencode.json` configures the opencode server. The relevant fields are:
+`config/opencode.json` configures the opencode server. The file is copied into
+the Docker image at build time, so **rebuild the image after any change**:
+
+```bash
+docker compose build opencode
+docker compose up -d opencode
+```
+
+The relevant fields are:
 
 ```jsonc
 {
@@ -173,6 +218,8 @@ Inference will be slower, but it will work.
 
 ## Useful Commands
 
+All commands are run from your laptop with the remote Docker context active.
+
 ```bash
 # View live logs
 docker compose logs -f
@@ -183,13 +230,17 @@ docker compose exec ollama ollama list
 # Pull an additional model
 docker compose exec ollama ollama pull <model>
 
-# Restart the opencode server (e.g. after a config change)
+# Rebuild the opencode image after a config change
+docker compose build opencode
+docker compose up -d opencode
+
+# Restart the opencode server
 docker compose restart opencode
 
 # Stop everything
 docker compose down
 
-# Stop and delete all persistent data (DESTRUCTIVE)
+# Stop and delete all persistent data on the remote host (DESTRUCTIVE)
 docker compose down -v
 ```
 
@@ -197,16 +248,21 @@ docker compose down -v
 
 ## Security Notes
 
-- **Credentials** are stored in `.env` (gitignored). Never commit `.env` to version control.
-  Use a strong, unique password for `OPENCODE_SERVER_PASSWORD`.
-- **Ollama API** (port `11434`) is deliberately not published to the host — it is
-  reachable only by other containers on the internal Docker network.
-- **Open WebUI** (port `3000`) is bound to `127.0.0.1` and only accessible via an
-  SSH tunnel or a TLS reverse proxy. Create an admin account on first visit.
-- **opencode** runs as a non-root user inside its container, limiting the blast radius
-  of any potential compromise.
-- The **opencode port** (`4096`) should still be protected by a firewall or VPN if
-  you do not want it exposed to the internet.
-- For production deployments, put the opencode server behind a reverse proxy with TLS
-  (e.g. nginx + Let's Encrypt / Caddy) to encrypt traffic.
+- **Credentials** are stored in `.env` on your laptop (gitignored). Never
+  commit `.env` to version control. Use a strong, unique password for
+  `OPENCODE_SERVER_PASSWORD`.
+- **Docker context transport:** Using SSH (`host=ssh://…`) encrypts all Docker
+  API traffic between your laptop and the remote host. Avoid exposing the
+  Docker daemon TCP port without TLS.
+- **Ollama API** (port `11434`) is deliberately not published to the host — it
+  is reachable only by other containers on the internal Docker network.
+- **Open WebUI** (port `3000`) is bound to `127.0.0.1` on the remote host and
+  only accessible via an SSH tunnel or a TLS reverse proxy. Create an admin
+  account on first visit.
+- **opencode** runs as a non-root user inside its container, limiting the blast
+  radius of any potential compromise.
+- The **opencode port** (`4096`) should still be protected by a firewall or VPN
+  if you do not want it exposed to the internet.
+- For production deployments, put the opencode server behind a reverse proxy
+  with TLS (e.g. nginx + Let's Encrypt / Caddy) to encrypt traffic.
 
