@@ -14,6 +14,12 @@
         "baseURL": "http://ollama:11434/v1"
       },
       "models": {
+        "mistral:7b": {
+          "name": "Mistral 7B"
+        },
+        "ministral-3:8b": {
+          "name": "Ministral 3 8B"
+        },
         "codellama:7b": {
           "name": "Code Llama 7B"
         },
@@ -35,7 +41,7 @@
     "skill": "deny"
   },
 
-  "model": "ollama/codellama:7b",
+  "model": "ollama/mistral:7b",
 
   "agent": {
     "build": {
