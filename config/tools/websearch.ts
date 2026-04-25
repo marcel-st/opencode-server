@@ -4,16 +4,11 @@ const DEFAULT_LIMIT = 5
 
 export default tool({
   description:
-    "Search the web using local SearXNG and return top results with URLs and snippets. Provide a query, or a site domain, or both.",
+    "Search the web using local SearXNG. Always pass the search terms as the 'query' argument — never call this tool without a query.",
   args: {
     query: tool.schema
       .string()
-      .optional()
-      .describe("Search query text (e.g. 'useEffect hook')"),
-    q: tool.schema
-      .string()
-      .optional()
-      .describe("Alias for query"),
+      .describe("The search terms to look up, extracted from the user's request. Required — must be non-empty."),
     site: tool.schema
       .string()
       .optional()
@@ -21,23 +16,23 @@ export default tool({
     limit: tool.schema
       .number()
       .optional()
-      .describe("Maximum number of results to return"),
+      .describe("Maximum number of results to return (default 5, max 10)"),
   },
   async execute(args) {
-    const baseQuery = (args.query ?? args.q ?? "").trim()
+    const query = (args.query ?? "").trim()
     const site = (args.site ?? "").trim()
-    if (!baseQuery && !site) {
-      throw new Error("websearch requires at least a query or a site parameter")
+    if (!query && !site) {
+      throw new Error("websearch requires a non-empty query")
     }
-    const query = site
-      ? baseQuery ? `${baseQuery} site:${site}` : `site:${site}`
-      : baseQuery
+    const fullQuery = site
+      ? query ? `${query} site:${site}` : `site:${site}`
+      : query
 
     const limit = Math.max(1, Math.min(10, Math.floor(args.limit ?? DEFAULT_LIMIT)))
     const searxBase = process.env.OPENCODE_SEARXNG_URL || "http://searxng:8080"
 
     const endpoint = new URL("/search", searxBase)
-    endpoint.searchParams.set("q", query)
+    endpoint.searchParams.set("q", fullQuery)
     endpoint.searchParams.set("format", "json")
 
     const response = await fetch(endpoint.toString(), {
@@ -62,7 +57,7 @@ export default tool({
     return JSON.stringify(
       {
         mode: "searxng-search",
-        query,
+        query: fullQuery,
         site: site || undefined,
         limit,
         results,
