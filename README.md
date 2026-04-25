@@ -112,27 +112,25 @@ docker compose build
 
 # Start only the ollama service (the other services are not started yet)
 docker compose up -d ollama
-docker compose exec ollama ollama pull llama3.1:8b
+docker compose exec ollama ollama pull llama3.1:8b   # default
 ```
 
 Popular coding models available on [ollama.com/library](https://ollama.com/library):
 
-| Model | VRAM | Tool calling | Notes |
-|-------|------|--------------|-------|
-| `llama3.1:8b` | ~5 GB | ✅ Reliable | Default — purpose-built for tool calling |
-| `mistral:7b` | ~4 GB | ✅ Reliable | Strong general + tool calling support |
-| `ministral-3:8b` | ~5 GB | ✅ Reliable | Mistral's efficient 8B variant |
-| `codellama:7b` | ~4 GB | ✅ Reliable | Coding-focused, standard tool calling |
-| `gemma4:e4b` | ~8 GB | ❌ Google API only | Hardcoded to call `google:search` with no args; unusable for web tools |
-| `qwen2.5-coder:7b` | ~8 GB | ⚠️ Pseudo-calls | Outputs tool call JSON as text instead of executing |
-| `qwen2.5-coder:14b` | ~16 GB | ⚠️ Pseudo-calls | Better code quality but same tool-call limitation |
-| `deepseek-coder-v2:16b` | ~20 GB | ✅ Generally good | Strong reasoning |
+| Model | VRAM | Notes |
+|-------|------|-------|
+| `llama3.1:8b` | ~5 GB | Default — strong general-purpose model |
+| `mistral:7b` | ~4 GB | Strong general-purpose model |
+| `ministral-3:8b` | ~5 GB | Compact Mistral variant |
+| `codellama:7b` | ~4 GB | Coding-focused |
+| `qwen2.5-coder:7b` | ~8 GB | Coding-focused |
+| `gemma4:e4b` | ~8 GB | Google model |
+| `deepseek-coder-v2:16b` | ~20 GB | Strong coding + reasoning |
 
-> **Tool calling note:** Qwen 2.5 Coder models output raw JSON pseudo-calls
-> instead of invoking tools. Gemma 4 is fine-tuned on Google's proprietary
-> tool API and always calls `google:search` with no arguments regardless of
-> available tools. Mistral, Ministral, Code Llama, and DeepSeek Coder use
-> standard Ollama tool calling and are recommended.
+> **Web search in opencode sessions:** Local Ollama models have inconsistent
+> structured tool-calling support when used via the OpenAI-compatible API.
+> For reliable web-augmented conversations, use **Open WebUI** — it is
+> pre-configured in this stack with SearXNG RAG and works out of the box.
 
 ### 5 — Start the full stack
 
@@ -282,36 +280,25 @@ can change `model` to any tag you have pulled in ollama.
 
 ### Internet search (SearXNG)
 
-Open WebUI is pre-configured to use an internal `searxng` service for web
-search out of the box. After `docker compose up -d`, internet search is
-available in Open WebUI chat when web search is enabled in the UI for a
-conversation.
+**Open WebUI** is the recommended interface for web-augmented conversations.
+It is pre-configured to use the internal `searxng` service for RAG web search
+out of the box. After `docker compose up -d`, enable web search per-message
+in Open WebUI by clicking the globe icon next to the chat input.
 
-For the `opencode` server itself, this stack ships three custom search tools
-that route all queries through local SearXNG — no external API keys required:
+For the `opencode` server itself, this stack ships custom `websearch` and
+`webfetch` tool overrides that route queries through local SearXNG instead of
+external providers — no API keys required. These tools work when the model
+makes a proper structured tool call, which depends on the model and Ollama's
+tool-calling support for it.
 
 | Tool | Description |
 |------|-------------|
-| `websearch` | Primary web search. Accepts `query`, optional `site` (domain filter), and optional `limit`. |
-| `webfetch` | Fetches a URL and returns its text content. If a `query` is also provided alongside a URL, performs a site-scoped SearXNG search instead of a direct fetch. Falls back to a plain search if the input is not a URL. |
-| `google:search` | Compatibility alias for models that generate `google:search` tool calls from training data. Behaves identically to `websearch`. |
+| `websearch` | Search via SearXNG. Accepts `query` (required) and optional `site` to restrict results to a domain. |
+| `webfetch` | Fetch a URL and return its text content. Falls back to a SearXNG search if the input is not a URL. |
 
-**Site-specific search** is supported by all three tools via the `site`
-parameter. For example, asking the model to search the opencode docs will
-produce a call like:
-
-```
-websearch(query="attach command", site="opencode.ai")
-```
-
-which translates to a SearXNG query of `attach command site:opencode.ai`.
-
-An **agent prompt** is baked into `config/opencode.json` to guide models
-toward correct tool usage — always passing a `query` argument and invoking
-tools through the proper mechanism rather than outputting raw JSON.
-
-`OPENCODE_ENABLE_EXA=true` is still left enabled as a fallback so opencode's
-built-in hosted `websearch` can be used if the custom override is unavailable.
+`OPENCODE_ENABLE_EXA=true` is still enabled as a fallback so opencode's
+built-in Exa-backed `websearch` can be used if the custom override is
+unavailable.
 
 Defaults are configured in `docker-compose.yaml`:
 
@@ -327,7 +314,7 @@ You can tune result fan-out in `.env` (see `.env.example`):
 - `OPENCODE_ENABLE_EXA` (default `true`) keeps Exa-backed built-in `websearch`
   available as fallback
 - `OPENCODE_SEARXNG_URL` (default `http://searxng:8080`) is used by the custom
-  `websearch`, `webfetch`, and `google:search` tools
+  `websearch` and `webfetch` tools
 - `RAG_WEB_SEARCH_RESULT_COUNT` (default `5`)
 - `RAG_WEB_SEARCH_CONCURRENT_REQUESTS` (default `10`)
 

@@ -17,33 +17,20 @@ function truncate(input: string): string {
 }
 
 export default tool({
-  description:
-    "Fetch a URL and return its content. If you also provide a query, or if the input is not a URL, a SearXNG site search is performed instead. Use this to search documentation on a specific site.",
+  description: "Fetch a URL and return its text content. If the input is not a URL, run a SearXNG search instead.",
   args: {
     url: tool.schema
       .string()
-      .optional()
-      .describe("URL to fetch, a site domain (e.g. 'docs.example.com'), or a plain-text search query"),
-    query: tool.schema
-      .string()
-      .optional()
-      .describe("Search terms to look up — when combined with a URL/domain this performs a site-specific search"),
+      .describe("URL to fetch, or a plain-text search query if not a URL"),
   },
   async execute(args) {
-    const rawInput = (args.url ?? "").trim()
-    const explicitQuery = (args.query ?? "").trim()
-    if (!rawInput && !explicitQuery) {
-      throw new Error("webfetch requires either url or query")
-    }
+    const input = args.url.trim()
+    const isUrl = /^https?:\/\//i.test(input)
 
-    const isUrl = /^https?:\/\//i.test(rawInput)
-
-    // Site-specific search: URL/domain provided together with a query
-    if (isUrl && explicitQuery) {
+    if (!isUrl) {
       const searxBase = process.env.OPENCODE_SEARXNG_URL || "http://searxng:8080"
       const endpoint = new URL("/search", searxBase)
-      const domain = new URL(rawInput).hostname
-      endpoint.searchParams.set("q", `${explicitQuery} site:${domain}`)
+      endpoint.searchParams.set("q", input)
       endpoint.searchParams.set("format", "json")
 
       const response = await fetch(endpoint.toString(), {
@@ -65,50 +52,10 @@ export default tool({
         snippet: item.content || "",
       }))
 
-      return JSON.stringify({ mode: "searxng-search", query: `${explicitQuery} site:${domain}`, results }, null, 2)
+      return JSON.stringify({ query: input, results }, null, 2)
     }
 
-    // Plain search: no URL, or explicit query only
-    if (!isUrl) {
-      const searchQuery = explicitQuery || rawInput
-      const searxBase = process.env.OPENCODE_SEARXNG_URL || "http://searxng:8080"
-      const endpoint = new URL("/search", searxBase)
-      endpoint.searchParams.set("q", searchQuery)
-      endpoint.searchParams.set("format", "json")
-
-      const response = await fetch(endpoint.toString(), {
-        headers: { Accept: "application/json" },
-      })
-
-      if (!response.ok) {
-        throw new Error(
-          `SearXNG request failed: ${response.status} ${response.statusText}`,
-        )
-      }
-
-      const data = (await response.json()) as {
-        results?: Array<{ title?: string; url?: string; content?: string }>
-      }
-
-      const results = (data.results || []).slice(0, 5).map((item, index) => ({
-        rank: index + 1,
-        title: item.title || "(untitled)",
-        url: item.url || "",
-        snippet: item.content || "",
-      }))
-
-      return JSON.stringify(
-        {
-          mode: "searxng-search",
-          query: searchQuery,
-          results,
-        },
-        null,
-        2,
-      )
-    }
-
-    const response = await fetch(rawInput, { redirect: "follow" })
+    const response = await fetch(input, { redirect: "follow" })
     if (!response.ok) {
       throw new Error(`Fetch failed: ${response.status} ${response.statusText}`)
     }

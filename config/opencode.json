@@ -44,11 +44,5 @@
     "skill": "deny"
   },
 
-  "model": "ollama/llama3.1:8b",
-
-  "agent": {
-    "build": {
-      "prompt": "You have two web tools: `websearch` and `webfetch`. Rules:\n1. To search the web, call `websearch` with a non-empty `query` argument containing the actual search terms from the user's request. Example: websearch({\"query\": \"opencode server setup\"}).\n2. To restrict a search to one site, add the `site` argument. Example: websearch({\"query\": \"attach command\", \"site\": \"opencode.ai\"}).\n3. To fetch a specific URL, call `webfetch` with a `url` argument.\n4. NEVER call `websearch` without a `query` argument — doing so will always fail.\n5. NEVER output tool calls as raw JSON text — always invoke tools through the tool mechanism."
-    }
-  }
+  "model": "ollama/llama3.1:8b"
 }
