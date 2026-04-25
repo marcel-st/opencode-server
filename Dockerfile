@@ -11,8 +11,9 @@ RUN apt-get update \
     && groupadd --system opencode \
     && useradd --system --gid opencode --create-home --home-dir /home/opencode opencode
 
-# Install opencode-ai globally and clean the npm cache
-RUN npm install -g "opencode-ai@${OPENCODE_VERSION}" && npm cache clean --force
+# Install opencode-ai globally.
+RUN npm install -g "opencode-ai@${OPENCODE_VERSION}" \
+    && npm cache clean --force
 
 # Pre-create XDG config and data directories and embed the provider / model
 # configuration so no bind-mount from the Docker-host filesystem is required
@@ -23,7 +24,13 @@ RUN mkdir -p /home/opencode/.config/opencode \
     && chown -R opencode:opencode /home/opencode
 
 COPY --chown=opencode:opencode config/opencode.json /home/opencode/.config/opencode/opencode.json
+COPY --chown=opencode:opencode config/package.json /home/opencode/.config/opencode/package.json
 COPY --chown=opencode:opencode config/tools /home/opencode/.config/opencode/tools
+
+# Install tool dependencies next to the tool sources so Node ESM can resolve
+# imports like "@opencode-ai/plugin" from /home/opencode/.config/opencode/tools.
+RUN npm install --prefix /home/opencode/.config/opencode --omit=dev \
+    && chown -R opencode:opencode /home/opencode/.config/opencode
 
 # Create the workspace directory and transfer ownership to the non-root user
 WORKDIR /workspace

@@ -1,4 +1,4 @@
-import { tool } from "@opencode-ai/plugin"
+import { tool } from "../node_modules/@opencode-ai/plugin/dist/index.js"
 
 const DEFAULT_LIMIT = 5
 

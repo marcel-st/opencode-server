@@ -313,13 +313,15 @@ docker compose build --no-cache opencode
 docker compose up -d --force-recreate --no-deps opencode
 ```
 
-The rebuild is required whenever you change `config/opencode.json` or files in
-`config/tools/` because they are baked into the `opencode` image.
+The rebuild is required whenever you change `config/opencode.json`,
+`config/package.json`, or files in `config/tools/` because they are baked into
+the `opencode` image.
 
 Then verify inside the running container:
 
 ```bash
 docker compose exec opencode sh -lc 'opencode --version; echo OPENCODE_ENABLE_EXA=$OPENCODE_ENABLE_EXA'
+docker compose exec opencode sh -lc 'node -e "import(\"@opencode-ai/plugin\").then(()=>console.log(\"plugin ok\"))"'
 ```
 
 If the server process starts but the web UI shows an empty response and
