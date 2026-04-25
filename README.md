@@ -75,9 +75,21 @@ cp .env.example .env
 Then open `.env` in your editor and replace the placeholder values:
 
 ```dotenv
-OPENCODE_SERVER_USERNAME=opencode   # ← change me
-OPENCODE_SERVER_PASSWORD=changeme   # ← change me (use a strong password!)
+OPENCODE_SERVER_USERNAME=opencode          # ← change me
+OPENCODE_SERVER_PASSWORD='changeme'        # ← change me (use a strong password!)
 ```
+
+> **Quoting passwords with special characters:** Docker Compose parses `.env`
+> values without a shell, but characters such as `$`, `#`, `=`, and `!` can
+> still be mis-interpreted (e.g. `$VAR` triggers variable expansion, `#` starts
+> an inline comment).  Wrap the password in **single quotes** to prevent any
+> interpretation of special characters:
+>
+> ```dotenv
+> OPENCODE_SERVER_PASSWORD='p@$$w0rd#42!'
+> ```
+>
+> Single-quoted values are taken literally — no escaping needed.
 
 > **Note:** `.env` is listed in `.gitignore` and will never be committed to
 > version control.  It is read by `docker compose` on your laptop; the
@@ -294,7 +306,9 @@ The `ollama` service also sets:
 
 - **Credentials** are stored in `.env` on your laptop (gitignored). Never
   commit `.env` to version control. Use a strong, unique password for
-  `OPENCODE_SERVER_PASSWORD`.
+  `OPENCODE_SERVER_PASSWORD` and wrap it in **single quotes** to prevent
+  special characters (`$`, `#`, `=`, `!`, …) from being mis-parsed by Docker
+  Compose (see [Set credentials](#3--set-credentials)).
 - **Docker context transport:** Using SSH (`host=ssh://…`) encrypts all Docker
   API traffic between your laptop and the remote host. Avoid exposing the
   Docker daemon TCP port without TLS.
