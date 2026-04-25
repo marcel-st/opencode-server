@@ -278,11 +278,14 @@ search out of the box. After `docker compose up -d`, internet search is
 available in Open WebUI chat when web search is enabled in the UI for a
 conversation.
 
-For the `opencode` server itself, web search is a separate feature. The
-attached CLI / web UI uses opencode's built-in `websearch` tool, which is
-enabled in this stack with `OPENCODE_ENABLE_EXA=true`. This does not use the
-local `searxng` container; it enables opencode's own hosted search integration
-for looking up live documentation and references.
+For the `opencode` server itself, this stack ships custom tool overrides for
+both `websearch` and `webfetch`
+(same tool names). They route search-style input to local `searxng` and fetch
+regular URLs directly. This avoids API-key requirements from external search
+providers in attached sessions.
+
+`OPENCODE_ENABLE_EXA=true` is still left enabled as a fallback so opencode's
+built-in hosted `websearch` can be used if the custom override is unavailable.
 
 Defaults are configured in `docker-compose.yaml`:
 
@@ -293,9 +296,31 @@ Defaults are configured in `docker-compose.yaml`:
 
 You can tune result fan-out in `.env` (see `.env.example`):
 
-- `OPENCODE_ENABLE_EXA` (default `true`) enables opencode's own `websearch` tool
+- `OPENCODE_VERSION` (default `latest`) controls which `opencode-ai` version is
+  installed in the server image
+- `OPENCODE_ENABLE_EXA` (default `true`) keeps Exa-backed built-in `websearch`
+  available as fallback
+- `OPENCODE_SEARXNG_URL` (default `http://searxng:8080`) is used by the custom
+  `websearch` and `webfetch` overrides
 - `RAG_WEB_SEARCH_RESULT_COUNT` (default `5`)
 - `RAG_WEB_SEARCH_CONCURRENT_REQUESTS` (default `10`)
+
+If attached sessions still claim web tools need an API key even with
+`OPENCODE_ENABLE_EXA=true`, rebuild with the latest opencode release:
+
+```bash
+docker compose build --no-cache opencode
+docker compose up -d --force-recreate --no-deps opencode
+```
+
+The rebuild is required whenever you change `config/opencode.json` or files in
+`config/tools/` because they are baked into the `opencode` image.
+
+Then verify inside the running container:
+
+```bash
+docker compose exec opencode sh -lc 'opencode --version; echo OPENCODE_ENABLE_EXA=$OPENCODE_ENABLE_EXA'
+```
 
 ### No GPU / CPU-only
 

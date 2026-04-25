@@ -31,7 +31,10 @@ services:
 
   # ── opencode server ──────────────────────────────────────────────────────────
   opencode:
-    build: .
+    build:
+      context: .
+      args:
+        OPENCODE_VERSION: ${OPENCODE_VERSION:-latest}
     ports:
       - "4096:4096"
     environment:
@@ -39,9 +42,10 @@ services:
       # Credentials are read from the .env file (see .env.example).
       OPENCODE_SERVER_USERNAME: ${OPENCODE_SERVER_USERNAME}
       OPENCODE_SERVER_PASSWORD: ${OPENCODE_SERVER_PASSWORD}
-      # Enable opencode's built-in websearch tool (Exa-backed) so attached
-      # CLI / web sessions can look up live documentation and references.
+      # Keep Exa-backed built-in websearch available as a fallback.
       OPENCODE_ENABLE_EXA: ${OPENCODE_ENABLE_EXA:-true}
+      # Custom websearch/webfetch overrides query local SearXNG.
+      OPENCODE_SEARXNG_URL: ${OPENCODE_SEARXNG_URL:-http://searxng:8080}
 
       # ── Provider: Ollama ──────────────────────────────────────────────────────
       # Tells opencode which model to use by default.
@@ -54,6 +58,7 @@ services:
       - opencode_data:/home/opencode/.local/share/opencode
     networks:
       - backend
+      - frontend
     depends_on:
       ollama:
         condition: service_healthy
