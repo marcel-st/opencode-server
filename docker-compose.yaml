@@ -39,6 +39,9 @@ services:
       # Credentials are read from the .env file (see .env.example).
       OPENCODE_SERVER_USERNAME: ${OPENCODE_SERVER_USERNAME}
       OPENCODE_SERVER_PASSWORD: ${OPENCODE_SERVER_PASSWORD}
+      # Enable opencode's built-in websearch tool (Exa-backed) so attached
+      # CLI / web sessions can look up live documentation and references.
+      OPENCODE_ENABLE_EXA: ${OPENCODE_ENABLE_EXA:-true}
 
       # ── Provider: Ollama ──────────────────────────────────────────────────────
       # Tells opencode which model to use by default.

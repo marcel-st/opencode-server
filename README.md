@@ -278,14 +278,22 @@ search out of the box. After `docker compose up -d`, internet search is
 available in Open WebUI chat when web search is enabled in the UI for a
 conversation.
 
+For the `opencode` server itself, web search is a separate feature. The
+attached CLI / web UI uses opencode's built-in `websearch` tool, which is
+enabled in this stack with `OPENCODE_ENABLE_EXA=true`. This does not use the
+local `searxng` container; it enables opencode's own hosted search integration
+for looking up live documentation and references.
+
 Defaults are configured in `docker-compose.yaml`:
 
 - `ENABLE_RAG_WEB_SEARCH=true`
+- `OPENCODE_ENABLE_EXA=true`
 - `RAG_WEB_SEARCH_ENGINE=searxng`
 - `SEARXNG_QUERY_URL=http://searxng:8080/search?q=<query>&format=json`
 
 You can tune result fan-out in `.env` (see `.env.example`):
 
+- `OPENCODE_ENABLE_EXA` (default `true`) enables opencode's own `websearch` tool
 - `RAG_WEB_SEARCH_RESULT_COUNT` (default `5`)
 - `RAG_WEB_SEARCH_CONCURRENT_REQUESTS` (default `10`)
 
