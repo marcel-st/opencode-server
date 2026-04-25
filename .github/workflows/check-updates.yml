@@ -1,0 +1,183 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# check-updates.yml
+#
+# Periodically checks whether the pinned software versions used in this
+# repository are still up-to-date and, if newer versions are available,
+# automatically opens a pull request with the updated version strings.
+#
+# Software tracked
+#   • opencode-ai   – npm package pinned in Dockerfile
+#   • ollama        – Docker Hub image pinned in docker-compose.yaml
+#   • open-webui    – GitHub Container Registry image pinned in docker-compose.yaml
+#
+# Triggers
+#   • Schedule : every Monday at 08:00 UTC
+#   • Manual   : workflow_dispatch (useful for ad-hoc checks)
+# ──────────────────────────────────────────────────────────────────────────────
+
+name: Check and Update Software Versions
+
+on:
+  schedule:
+    - cron: "0 8 * * 1" # Every Monday at 08:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  # ── Step 1: discover current & latest versions ──────────────────────────────
+  check-versions:
+    name: Check versions
+    runs-on: ubuntu-latest
+    outputs:
+      opencode_current: ${{ steps.opencode.outputs.current }}
+      opencode_latest:  ${{ steps.opencode.outputs.latest }}
+      ollama_current:   ${{ steps.ollama.outputs.current }}
+      ollama_latest:    ${{ steps.ollama.outputs.latest }}
+      webui_current:    ${{ steps.webui.outputs.current }}
+      webui_latest:     ${{ steps.webui.outputs.latest }}
+      updates_needed:   ${{ steps.summary.outputs.updates_needed }}
+      changes:          ${{ steps.summary.outputs.changes }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── opencode-ai (npm) ──────────────────────────────────────────────────
+      - name: Check opencode-ai version
+        id: opencode
+        run: |
+          CURRENT=$(grep -oP 'opencode-ai@\K[0-9]+\.[0-9]+\.[0-9]+' Dockerfile)
+          LATEST=$(curl -s https://registry.npmjs.org/opencode-ai/latest | jq -r .version)
+          if [ -z "$LATEST" ] || [ "$LATEST" = "null" ]; then
+            echo "::warning::Could not determine latest opencode-ai version; skipping."
+            LATEST="$CURRENT"
+          fi
+          echo "current=$CURRENT" >> "$GITHUB_OUTPUT"
+          echo "latest=$LATEST"   >> "$GITHUB_OUTPUT"
+          echo "opencode-ai  current=$CURRENT  latest=$LATEST"
+
+      # ── ollama (Docker Hub) ────────────────────────────────────────────────
+      - name: Check ollama version
+        id: ollama
+        run: |
+          CURRENT=$(grep -oP 'ollama/ollama:\K[0-9]+\.[0-9]+\.[0-9]+' docker-compose.yaml)
+          # Fetch tags, keep semver-only entries, pick the numerically highest one
+          LATEST=$(curl -s "https://hub.docker.com/v2/repositories/ollama/ollama/tags/?page_size=100" \
+            | jq -r '[.results[].name | select(test("^[0-9]+\\.[0-9]+\\.[0-9]+$"))]
+                      | sort_by(split(".") | map(tonumber)) | last')
+          if [ -z "$LATEST" ] || [ "$LATEST" = "null" ]; then
+            echo "::warning::Could not determine latest ollama version; skipping."
+            LATEST="$CURRENT"
+          fi
+          echo "current=$CURRENT" >> "$GITHUB_OUTPUT"
+          echo "latest=$LATEST"   >> "$GITHUB_OUTPUT"
+          echo "ollama  current=$CURRENT  latest=$LATEST"
+
+      # ── open-webui (GitHub releases) ──────────────────────────────────────
+      - name: Check open-webui version
+        id: webui
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          CURRENT=$(grep -oP 'open-webui:v\K[0-9]+\.[0-9]+\.[0-9]+' docker-compose.yaml)
+          LATEST=$(curl -s -H "Authorization: Bearer ${GH_TOKEN}" \
+            "https://api.github.com/repos/open-webui/open-webui/releases/latest" \
+            | jq -r '.tag_name | ltrimstr("v")')
+          if [ -z "$LATEST" ] || [ "$LATEST" = "null" ]; then
+            echo "::warning::Could not determine latest open-webui version; skipping."
+            LATEST="$CURRENT"
+          fi
+          echo "current=$CURRENT" >> "$GITHUB_OUTPUT"
+          echo "latest=$LATEST"   >> "$GITHUB_OUTPUT"
+          echo "open-webui  current=$CURRENT  latest=$LATEST"
+
+      # ── Determine whether any updates are needed ───────────────────────────
+      - name: Summarise available updates
+        id: summary
+        env:
+          OC_CUR: ${{ steps.opencode.outputs.current }}
+          OC_NEW: ${{ steps.opencode.outputs.latest }}
+          OL_CUR: ${{ steps.ollama.outputs.current }}
+          OL_NEW: ${{ steps.ollama.outputs.latest }}
+          WU_CUR: ${{ steps.webui.outputs.current }}
+          WU_NEW: ${{ steps.webui.outputs.latest }}
+        run: |
+          UPDATES_NEEDED=false
+          CHANGES=""
+
+          if [ "$OC_CUR" != "$OC_NEW" ]; then
+            UPDATES_NEEDED=true
+            CHANGES="${CHANGES}- \`opencode-ai\`: \`${OC_CUR}\` → \`${OC_NEW}\`\n"
+          fi
+          if [ "$OL_CUR" != "$OL_NEW" ]; then
+            UPDATES_NEEDED=true
+            CHANGES="${CHANGES}- \`ollama/ollama\`: \`${OL_CUR}\` → \`${OL_NEW}\`\n"
+          fi
+          if [ "$WU_CUR" != "$WU_NEW" ]; then
+            UPDATES_NEEDED=true
+            CHANGES="${CHANGES}- \`open-webui\`: \`v${WU_CUR}\` → \`v${WU_NEW}\`\n"
+          fi
+
+          echo "updates_needed=$UPDATES_NEEDED" >> "$GITHUB_OUTPUT"
+          # Multi-line value for GITHUB_OUTPUT
+          {
+            echo "changes<<EOF"
+            printf "%b" "$CHANGES"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+  # ── Step 2: apply updates and open a PR ─────────────────────────────────────
+  update-versions:
+    name: Apply updates
+    needs: check-versions
+    if: needs.check-versions.outputs.updates_needed == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── Apply version bumps ────────────────────────────────────────────────
+      - name: Update opencode-ai in Dockerfile
+        if: needs.check-versions.outputs.opencode_current != needs.check-versions.outputs.opencode_latest
+        env:
+          OLD: ${{ needs.check-versions.outputs.opencode_current }}
+          NEW: ${{ needs.check-versions.outputs.opencode_latest }}
+        run: sed -i "s/opencode-ai@${OLD}/opencode-ai@${NEW}/g" Dockerfile
+
+      - name: Update ollama in docker-compose.yaml
+        if: needs.check-versions.outputs.ollama_current != needs.check-versions.outputs.ollama_latest
+        env:
+          OLD: ${{ needs.check-versions.outputs.ollama_current }}
+          NEW: ${{ needs.check-versions.outputs.ollama_latest }}
+        run: sed -i "s|ollama/ollama:${OLD}|ollama/ollama:${NEW}|g" docker-compose.yaml
+
+      - name: Update open-webui in docker-compose.yaml
+        if: needs.check-versions.outputs.webui_current != needs.check-versions.outputs.webui_latest
+        env:
+          OLD: ${{ needs.check-versions.outputs.webui_current }}
+          NEW: ${{ needs.check-versions.outputs.webui_latest }}
+        run: sed -i "s|open-webui:v${OLD}|open-webui:v${NEW}|g" docker-compose.yaml
+
+      # ── Open a pull request with the changes ──────────────────────────────
+      - name: Create pull request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: automated/software-updates
+          commit-message: "chore: update pinned software versions"
+          title: "chore: automated software version updates"
+          body: |
+            ## Automated Software Updates
+
+            The following pinned versions have been updated:
+
+            ${{ needs.check-versions.outputs.changes }}
+
+            > This pull request was automatically created by the
+            > [check-updates workflow](.github/workflows/check-updates.yml).
+            > Please review the changes and merge when ready.
+          delete-branch: true
