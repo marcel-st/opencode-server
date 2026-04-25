@@ -324,3 +324,21 @@ The `ollama` service also sets:
 - For production deployments, put the opencode server behind a reverse proxy
   with TLS (e.g. nginx + Let's Encrypt / Caddy) to encrypt traffic.
 
+---
+
+## Community and Governance
+
+This repository includes the standard GitHub community health documents:
+
+- **License:** [LICENSE](LICENSE)
+- **Code of Conduct:** [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+- **Contributing Guide:** [CONTRIBUTING.md](CONTRIBUTING.md)
+- **Security Policy:** [SECURITY.md](SECURITY.md)
+- **Support:** [SUPPORT.md](SUPPORT.md)
+
+GitHub templates and ownership metadata:
+
+- **Issue templates:** `.github/ISSUE_TEMPLATE/`
+- **Pull request template:** `.github/pull_request_template.md`
+- **Code owners:** `.github/CODEOWNERS`
+

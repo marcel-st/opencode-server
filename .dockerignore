@@ -15,5 +15,4 @@ Thumbs.db
 # Documentation (not needed at build time)
 *.md
 
-# Runtime config is mounted as a volume – not baked into the image
-config/
+# Keep config in build context because Dockerfile copies config/opencode.json
