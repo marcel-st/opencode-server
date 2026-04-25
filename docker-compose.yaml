@@ -15,6 +15,7 @@
 #   opencode   – headless opencode server (secured with basic-auth)
 #   ollama     – local LLM runtime with NVIDIA GPU passthrough
 #   open-webui – browser UI for managing / chatting with ollama models
+#   searxng    – private metasearch engine used for web search in Open WebUI
 #
 # Quick start (run from your laptop after setting up the remote context)
 #   1. cp .env.example .env  and set OPENCODE_SERVER_USERNAME / PASSWORD.
@@ -117,6 +118,13 @@ services:
       - "127.0.0.1:3000:8080"
     environment:
       OLLAMA_BASE_URL: http://ollama:11434
+      # Enable web search in chats via the internal SearXNG service.
+      ENABLE_RAG_WEB_SEARCH: "true"
+      RAG_WEB_SEARCH_ENGINE: "searxng"
+      SEARXNG_QUERY_URL: "http://searxng:8080/search?q=<query>&format=json"
+      # Optional tuning knobs (overridable from .env).
+      RAG_WEB_SEARCH_RESULT_COUNT: ${RAG_WEB_SEARCH_RESULT_COUNT:-5}
+      RAG_WEB_SEARCH_CONCURRENT_REQUESTS: ${RAG_WEB_SEARCH_CONCURRENT_REQUESTS:-10}
       # Raise the HTTP client timeout so large-model responses are not cut off.
       AIOHTTP_CLIENT_TIMEOUT: "300"
       # Disable outbound community-sharing calls and telemetry to keep all
@@ -130,12 +138,24 @@ services:
     depends_on:
       ollama:
         condition: service_healthy
+      searxng:
+        condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:8080/health"]
       interval: 20s
       timeout: 10s
       retries: 5
       start_period: 60s
+    restart: unless-stopped
+
+  # ── SearXNG (private web search backend for Open WebUI) ────────────────────
+  searxng:
+    image: searxng/searxng:latest
+    environment:
+      BASE_URL: http://searxng:8080/
+      INSTANCE_NAME: opencode-searxng
+    networks:
+      - frontend
     restart: unless-stopped
 
 networks:

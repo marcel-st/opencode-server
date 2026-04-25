@@ -11,6 +11,7 @@ The stack is:
 | **opencode** | Headless opencode server (basic-auth protected) |
 | **ollama** | Local LLM runtime with NVIDIA GPU pass-through |
 | **open-webui** | Browser UI for chatting with and managing ollama models |
+| **searxng** | Private metasearch backend used for internet search in Open WebUI |
 
 > **Architecture note:** `docker compose` is executed from your **local
 > laptop**.  The Docker daemon (and therefore all containers) run on the
@@ -136,6 +137,7 @@ Services and their default ports (on the **remote host**):
 |---------|------|---------|-------|
 | opencode server | `4096` | `0.0.0.0` | Authenticated via basic-auth |
 | open-webui | `3000` | `127.0.0.1` | Access via SSH tunnel (see below) |
+| searxng | *(internal)* | Docker network only | Used by Open WebUI for web search |
 | ollama API | *(internal)* | Docker network only | Not published to the host |
 
 ### 6 — Connect from your laptop
@@ -208,6 +210,24 @@ The relevant fields are:
 
 The `baseURL` points to the `ollama` service inside the Docker network. You
 can change `model` to any tag you have pulled in ollama.
+
+### Internet search (SearXNG)
+
+Open WebUI is pre-configured to use an internal `searxng` service for web
+search out of the box. After `docker compose up -d`, internet search is
+available in Open WebUI chat when web search is enabled in the UI for a
+conversation.
+
+Defaults are configured in `docker-compose.yaml`:
+
+- `ENABLE_RAG_WEB_SEARCH=true`
+- `RAG_WEB_SEARCH_ENGINE=searxng`
+- `SEARXNG_QUERY_URL=http://searxng:8080/search?q=<query>&format=json`
+
+You can tune result fan-out in `.env` (see `.env.example`):
+
+- `RAG_WEB_SEARCH_RESULT_COUNT` (default `5`)
+- `RAG_WEB_SEARCH_CONCURRENT_REQUESTS` (default `10`)
 
 ### No GPU / CPU-only
 
