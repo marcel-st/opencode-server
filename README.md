@@ -99,9 +99,8 @@ OPENCODE_SERVER_PASSWORD='changeme'        # ← change me (use a strong passwor
 
 ### 4 — Choose a model
 
-Edit `config/opencode.json` and the `OPENCODE_DEFAULT_MODEL` value in
-`docker-compose.yaml` to set the model you want to use (the default is
-`qwen2.5-coder:7b`).
+Edit `config/opencode.json` to set the model you want to use (the default is
+`gemma4:e4b`).
 
 Once you have settled on a model, build the image (which bakes the
 configuration in) and start the ollama service so you can pull the model
@@ -113,17 +112,22 @@ docker compose build
 
 # Start only the ollama service (the other services are not started yet)
 docker compose up -d ollama
-docker compose exec ollama ollama pull qwen2.5-coder:7b
+docker compose exec ollama ollama pull gemma4:e4b
 ```
 
 Popular coding models available on [ollama.com/library](https://ollama.com/library):
 
-| Model | VRAM | Notes |
-|-------|------|-------|
-| `qwen2.5-coder:7b` | ~8 GB | Balanced quality / speed |
-| `qwen2.5-coder:14b` | ~16 GB | Better quality |
-| `codellama:13b` | ~16 GB | Good code completion |
-| `deepseek-coder-v2:16b` | ~20 GB | Strong reasoning |
+| Model | VRAM | Tool calling | Notes |
+|-------|------|--------------|-------|
+| `gemma4:e4b` | ~8 GB | ✅ Reliable | Default — executes web search tools correctly |
+| `qwen2.5-coder:7b` | ~8 GB | ⚠️ Pseudo-calls | Outputs tool call JSON as text instead of executing |
+| `qwen2.5-coder:14b` | ~16 GB | ⚠️ Pseudo-calls | Better code quality but same tool-call limitation |
+| `deepseek-coder-v2:16b` | ~20 GB | ✅ Generally good | Strong reasoning |
+
+> **Tool calling note:** Qwen 2.5 Coder models do not reliably execute tools
+> through the Ollama API — they output raw JSON text instead of invoking the
+> tool. Gemma 4 and DeepSeek Coder v2 make proper tool calls and are
+> recommended if you need web search or fetch functionality.
 
 ### 5 — Start the full stack
 
@@ -264,7 +268,7 @@ The relevant fields are:
       }
     }
   },
-  "model": "ollama/qwen2.5-coder:7b"        // default model (provider/model-tag)
+  "model": "ollama/gemma4:e4b"              // default model (provider/model-tag)
 }
 ```
 
@@ -278,11 +282,28 @@ search out of the box. After `docker compose up -d`, internet search is
 available in Open WebUI chat when web search is enabled in the UI for a
 conversation.
 
-For the `opencode` server itself, this stack ships custom tool overrides for
-both `websearch` and `webfetch`
-(same tool names). They route search-style input to local `searxng` and fetch
-regular URLs directly. This avoids API-key requirements from external search
-providers in attached sessions.
+For the `opencode` server itself, this stack ships three custom search tools
+that route all queries through local SearXNG — no external API keys required:
+
+| Tool | Description |
+|------|-------------|
+| `websearch` | Primary web search. Accepts `query`, optional `site` (domain filter), and optional `limit`. |
+| `webfetch` | Fetches a URL and returns its text content. If a `query` is also provided alongside a URL, performs a site-scoped SearXNG search instead of a direct fetch. Falls back to a plain search if the input is not a URL. |
+| `google:search` | Compatibility alias for models that generate `google:search` tool calls from training data. Behaves identically to `websearch`. |
+
+**Site-specific search** is supported by all three tools via the `site`
+parameter. For example, asking the model to search the opencode docs will
+produce a call like:
+
+```
+websearch(query="attach command", site="opencode.ai")
+```
+
+which translates to a SearXNG query of `attach command site:opencode.ai`.
+
+An **agent prompt** is baked into `config/opencode.json` to guide models
+toward correct tool usage — always passing a `query` argument and invoking
+tools through the proper mechanism rather than outputting raw JSON.
 
 `OPENCODE_ENABLE_EXA=true` is still left enabled as a fallback so opencode's
 built-in hosted `websearch` can be used if the custom override is unavailable.
@@ -301,7 +322,7 @@ You can tune result fan-out in `.env` (see `.env.example`):
 - `OPENCODE_ENABLE_EXA` (default `true`) keeps Exa-backed built-in `websearch`
   available as fallback
 - `OPENCODE_SEARXNG_URL` (default `http://searxng:8080`) is used by the custom
-  `websearch` and `webfetch` overrides
+  `websearch`, `webfetch`, and `google:search` tools
 - `RAG_WEB_SEARCH_RESULT_COUNT` (default `5`)
 - `RAG_WEB_SEARCH_CONCURRENT_REQUESTS` (default `10`)
 
@@ -412,6 +433,17 @@ docker compose logs --tail=120 searxng open-webui
 
 Some SearXNG engine warnings (for optional engines) are expected and usually
 non-fatal as long as the `searxng` container is up.
+
+### ERR_EMPTY_RESPONSE after rebuilding the opencode container
+
+If you front the opencode server with a reverse proxy configured as a **TCP
+stream** (e.g. Nginx Proxy Manager stream host), the proxy caches the backend
+container's IP address. When the opencode container is recreated (e.g. after a
+`docker compose up -d --build`), it gets a new internal IP and the proxy still
+points at the old one, causing `ERR_EMPTY_RESPONSE` in the browser.
+
+Fix: restart the proxy container after rebuilding opencode so it picks up the
+new IP.
 
 ### Build warning: "Docker Compose requires buildx plugin"
 

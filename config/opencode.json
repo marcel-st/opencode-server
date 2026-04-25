@@ -32,5 +32,11 @@
     "skill": "deny"
   },
 
-  "model": "ollama/qwen2.5-coder:7b"
+  "model": "ollama/gemma4:e4b",
+
+  "agent": {
+    "build": {
+      "prompt": "You have web search and fetch tools available. Rules:\n1. To search the web, call the `websearch` tool with a `query` argument containing the actual search terms. Example: websearch({\"query\": \"opencode server setup\"}).\n2. To fetch a specific URL, call `webfetch` with a `url` argument.\n3. To search within a specific site, call `websearch` with both `query` and `site` arguments. Example: websearch({\"query\": \"attach command\", \"site\": \"opencode.ai\"}).\n4. ALWAYS include a non-empty `query` argument when calling any search tool.\n5. NEVER output tool calls as raw JSON text in your response — always invoke them through the tool mechanism so they actually execute."
+    }
+  }
 }
