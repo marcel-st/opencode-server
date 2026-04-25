@@ -1,0 +1,40 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# create-labels.yml
+#
+# Ensures that all labels referenced by repository automation (e.g. Dependabot,
+# check-updates workflow) exist in GitHub.  The job is idempotent – it uses
+# `gh label create --force` so running it multiple times is safe.
+#
+# Triggers
+#   • Push to the default branch (catches label additions in code review)
+#   • Manual : workflow_dispatch (useful for one-off bootstrapping)
+# ──────────────────────────────────────────────────────────────────────────────
+
+name: Create Labels
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/create-labels.yml"
+  workflow_dispatch:
+
+permissions:
+  issues: write   # required to create/update labels
+
+jobs:
+  create-labels:
+    name: Ensure required labels exist
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Create dependencies label
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh label create dependencies \
+            --repo "${{ github.repository }}" \
+            --color "0075ca" \
+            --description "Pull requests that update a dependency file" \
+            --force
