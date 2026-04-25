@@ -1,4 +1,4 @@
-FROM node:22-alpine
+FROM node:25-alpine
 
 # Install curl (used by the Docker health check) and create a non-root user
 RUN apk add --no-cache curl \
