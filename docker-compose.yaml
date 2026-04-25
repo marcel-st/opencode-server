@@ -1,17 +1,28 @@
 # ──────────────────────────────────────────────────────────────────────────────
 # opencode-server  ·  docker-compose.yaml
 #
+# Designed to be executed from a LOCAL machine whose Docker client is pointed
+# at a REMOTE Docker host (e.g. via a Docker context or the DOCKER_HOST
+# environment variable).  All services run on the remote host; only the .env
+# file and this Compose file need to exist locally.
+#
+# Remote Docker context setup (one-time, on your laptop):
+#   docker context create remote \
+#     --docker "host=ssh://user@<remote-host>"
+#   docker context use remote
+#
 # Services
 #   opencode   – headless opencode server (secured with basic-auth)
 #   ollama     – local LLM runtime with NVIDIA GPU passthrough
 #   open-webui – browser UI for managing / chatting with ollama models
 #
-# Quick start
+# Quick start (run from your laptop after setting up the remote context)
 #   1. cp .env.example .env  and set OPENCODE_SERVER_USERNAME / PASSWORD.
-#   2. docker compose up -d
-#   3. Pull a model on the remote host:
+#   2. docker compose build
+#   3. docker compose up -d
+#   4. Pull a model on the remote host (executed from your laptop):
 #        docker compose exec ollama ollama pull qwen2.5-coder:7b
-#   4. From your laptop connect with the opencode CLI:
+#   5. From your laptop connect with the opencode CLI:
 #        opencode attach http://<username>:<password>@<remote-host>:4096
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -34,9 +45,8 @@ services:
       OPENCODE_DEFAULT_MODEL: "ollama/qwen2.5-coder:7b"
 
     volumes:
-      # Provider / model configuration
-      - ./config/opencode.json:/home/opencode/.config/opencode/opencode.json:ro
       # Persist opencode session data (conversation history, etc.)
+      # Named volumes are created on the remote Docker host automatically.
       - opencode_data:/home/opencode/.local/share/opencode
     networks:
       - backend

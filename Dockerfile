@@ -8,10 +8,15 @@ RUN apk add --no-cache curl \
 # Install opencode-ai globally (pinned for reproducibility) and clean the npm cache
 RUN npm install -g opencode-ai@1.14.24 && npm cache clean --force
 
-# Pre-create XDG config and data directories so volume mounts land with correct ownership
+# Pre-create XDG config and data directories and embed the provider / model
+# configuration so no bind-mount from the Docker-host filesystem is required
+# (the host running the Docker daemon may be a remote server with no access to
+# the local build context at runtime).
 RUN mkdir -p /home/opencode/.config/opencode \
              /home/opencode/.local/share/opencode \
     && chown -R opencode:opencode /home/opencode
+
+COPY --chown=opencode:opencode config/opencode.json /home/opencode/.config/opencode/opencode.json
 
 # Create the workspace directory and transfer ownership to the non-root user
 WORKDIR /workspace
