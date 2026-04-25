@@ -14,6 +14,9 @@
         "baseURL": "http://ollama:11434/v1"
       },
       "models": {
+        "llama3.1:8b": {
+          "name": "Llama 3.1 8B"
+        },
         "mistral:7b": {
           "name": "Mistral 7B"
         },
@@ -41,7 +44,7 @@
     "skill": "deny"
   },
 
-  "model": "ollama/mistral:7b",
+  "model": "ollama/llama3.1:8b",
 
   "agent": {
     "build": {

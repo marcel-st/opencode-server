@@ -100,7 +100,7 @@ OPENCODE_SERVER_PASSWORD='changeme'        # ← change me (use a strong passwor
 ### 4 — Choose a model
 
 Edit `config/opencode.json` to set the model you want to use (the default is
-`mistral:7b`).
+`llama3.1:8b`).
 
 Once you have settled on a model, build the image (which bakes the
 configuration in) and start the ollama service so you can pull the model
@@ -112,14 +112,15 @@ docker compose build
 
 # Start only the ollama service (the other services are not started yet)
 docker compose up -d ollama
-docker compose exec ollama ollama pull mistral:7b
+docker compose exec ollama ollama pull llama3.1:8b
 ```
 
 Popular coding models available on [ollama.com/library](https://ollama.com/library):
 
 | Model | VRAM | Tool calling | Notes |
 |-------|------|--------------|-------|
-| `mistral:7b` | ~4 GB | ✅ Reliable | Default — strong general + tool calling support |
+| `llama3.1:8b` | ~5 GB | ✅ Reliable | Default — purpose-built for tool calling |
+| `mistral:7b` | ~4 GB | ✅ Reliable | Strong general + tool calling support |
 | `ministral-3:8b` | ~5 GB | ✅ Reliable | Mistral's efficient 8B variant |
 | `codellama:7b` | ~4 GB | ✅ Reliable | Coding-focused, standard tool calling |
 | `gemma4:e4b` | ~8 GB | ❌ Google API only | Hardcoded to call `google:search` with no args; unusable for web tools |
@@ -272,7 +273,7 @@ The relevant fields are:
       }
     }
   },
-  "model": "ollama/mistral:7b"              // default model (provider/model-tag)
+  "model": "ollama/llama3.1:8b"             // default model (provider/model-tag)
 }
 ```
 
