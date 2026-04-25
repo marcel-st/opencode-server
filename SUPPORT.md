@@ -12,10 +12,11 @@
 - Compose version (`docker compose version`)
 - Whether Docker runs locally or via remote context
 - Relevant service logs (`docker compose logs --tail=200 <service>`)
+- Output of `docker compose ps`
 - Steps to reproduce and expected behavior
 
 ## Scope
 
 This project maintains infrastructure and documentation for running opencode,
-ollama, and Open WebUI in a remote-host Docker setup. Application-level bugs
-in upstream dependencies may need to be reported to their respective projects.
+ollama, Open WebUI, and SearXNG in a remote-host Docker setup. Application-level
+bugs in upstream dependencies may need to be reported to their respective projects.

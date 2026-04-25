@@ -140,6 +140,12 @@ Services and their default ports (on the **remote host**):
 | searxng | *(internal)* | Docker network only | Used by Open WebUI for web search |
 | ollama API | *(internal)* | Docker network only | Not published to the host |
 
+After startup, confirm all services are healthy/up:
+
+```bash
+docker compose ps
+```
+
 ### 6 — Connect from your laptop
 
 ```bash
@@ -256,6 +262,9 @@ All commands are run from your laptop with the remote Docker context active.
 # View live logs
 docker compose logs -f
 
+# Check service status / health
+docker compose ps
+
 # List models pulled into ollama
 docker compose exec ollama ollama list
 
@@ -266,6 +275,9 @@ docker compose exec ollama ollama pull <model>
 docker compose build opencode
 docker compose up -d opencode
 
+# Restart web search components (Open WebUI + SearXNG)
+docker compose restart searxng open-webui
+
 # Restart the opencode server
 docker compose restart opencode
 
@@ -275,6 +287,39 @@ docker compose down
 # Stop and delete all persistent data on the remote host (DESTRUCTIVE)
 docker compose down -v
 ```
+
+---
+
+## Troubleshooting
+
+### opencode restart loop with ENOENT for `.opencode`
+
+If logs show an error like `spawnSync .../bin/.opencode ENOENT`, rebuild and
+restart the opencode service so the latest Debian-based image is used:
+
+```bash
+docker compose build opencode
+docker compose up -d --no-deps opencode
+docker compose logs --tail=120 opencode
+```
+
+### Web search not returning results
+
+Verify `searxng` and `open-webui` are running and inspect logs:
+
+```bash
+docker compose ps searxng open-webui
+docker compose logs --tail=120 searxng open-webui
+```
+
+Some SearXNG engine warnings (for optional engines) are expected and usually
+non-fatal as long as the `searxng` container is up.
+
+### Build warning: "Docker Compose requires buildx plugin"
+
+This warning can appear on some hosts using the classic builder path. If image
+builds still complete successfully, the stack can run normally. Installing
+Docker buildx is still recommended.
 
 ---
 

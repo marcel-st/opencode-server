@@ -6,7 +6,9 @@ Describe what changed and why.
 
 - [ ] `docker compose build opencode`
 - [ ] `docker compose up -d`
+- [ ] `docker compose ps`
 - [ ] Relevant logs checked (`docker compose logs --tail=200 <service>`)
+- [ ] If web-search related: validated with `searxng` + `open-webui` running
 
 ## Documentation
 

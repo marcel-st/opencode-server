@@ -17,6 +17,7 @@ Thanks for your interest in improving this project.
    - `docker compose build opencode`
    - `docker compose up -d`
    - `docker compose ps`
+  - `docker compose logs --tail=120 opencode open-webui searxng`
 4. Update docs when behavior, defaults, or commands change.
 5. Open a pull request with context, testing notes, and risks.
 
@@ -26,6 +27,7 @@ Thanks for your interest in improving this project.
 - [ ] Related docs updated (README and/or community docs)
 - [ ] No secrets or credentials committed
 - [ ] Compose build/start path validated
+- [ ] Relevant service checks include searxng/open-webui when web-search behavior is touched
 - [ ] Backward-compatibility impact noted
 
 ## Commit Message Guidance
