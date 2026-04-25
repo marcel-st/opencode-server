@@ -23,7 +23,6 @@ RUN mkdir -p /home/opencode/.config/opencode \
     && chown -R opencode:opencode /home/opencode
 
 COPY --chown=opencode:opencode config/opencode.json /home/opencode/.config/opencode/opencode.json
-COPY --chown=opencode:opencode config/package.json /home/opencode/.config/opencode/package.json
 COPY --chown=opencode:opencode config/tools /home/opencode/.config/opencode/tools
 
 # Create the workspace directory and transfer ownership to the non-root user

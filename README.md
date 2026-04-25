@@ -322,6 +322,15 @@ Then verify inside the running container:
 docker compose exec opencode sh -lc 'opencode --version; echo OPENCODE_ENABLE_EXA=$OPENCODE_ENABLE_EXA'
 ```
 
+If the server process starts but the web UI shows an empty response and
+`opencode attach` fails to connect, run a clean opencode-only recreate and then
+check logs:
+
+```bash
+docker compose up -d --build --no-deps opencode
+docker compose logs --tail=200 opencode
+```
+
 ### No GPU / CPU-only
 
 Remove the `deploy` block from the `ollama` service in `docker-compose.yaml`:
