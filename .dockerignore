@@ -1,0 +1,19 @@
+# Exclude files that are not needed in the Docker build context.
+# This keeps the context small and avoids accidentally copying sensitive data.
+
+.git
+.gitignore
+.env
+.env.*
+
+# Editor and OS artifacts
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Documentation (not needed at build time)
+*.md
+
+# Runtime config is mounted as a volume – not baked into the image
+config/

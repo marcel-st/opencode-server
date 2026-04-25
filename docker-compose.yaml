@@ -7,7 +7,7 @@
 #   open-webui – browser UI for managing / chatting with ollama models
 #
 # Quick start
-#   1. Change OPENCODE_SERVER_USERNAME / OPENCODE_SERVER_PASSWORD below.
+#   1. cp .env.example .env  and set OPENCODE_SERVER_USERNAME / PASSWORD.
 #   2. docker compose up -d
 #   3. Pull a model on the remote host:
 #        docker compose exec ollama ollama pull qwen2.5-coder:7b
@@ -24,35 +24,43 @@ services:
       - "4096:4096"
     environment:
       # ── Authentication ────────────────────────────────────────────────────────
-      # Change these credentials before exposing the server to the internet.
-      OPENCODE_SERVER_USERNAME: opencode
-      OPENCODE_SERVER_PASSWORD: changeme
+      # Credentials are read from the .env file (see .env.example).
+      OPENCODE_SERVER_USERNAME: ${OPENCODE_SERVER_USERNAME}
+      OPENCODE_SERVER_PASSWORD: ${OPENCODE_SERVER_PASSWORD}
 
       # ── Provider: Ollama ──────────────────────────────────────────────────────
       # Tells opencode which model to use by default.
       # Format: <provider-id>/<model-name>  – must match a model pulled in ollama.
       OPENCODE_DEFAULT_MODEL: "ollama/qwen2.5-coder:7b"
 
-      # ── Server network settings (overrides config/opencode.json) ─────────────
-      # These match the CMD flags in the Dockerfile; listed here for visibility.
-      # Hostname 0.0.0.0 is required so the container is reachable from outside.
-
     volumes:
       # Provider / model configuration
-      - ./config/opencode.json:/root/.config/opencode/opencode.json:ro
+      - ./config/opencode.json:/home/opencode/.config/opencode/opencode.json:ro
       # Persist opencode session data (conversation history, etc.)
-      - opencode_data:/root/.local/share/opencode
+      - opencode_data:/home/opencode/.local/share/opencode
+    networks:
+      - backend
     depends_on:
-      - ollama
+      ollama:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-s", "--max-time", "5", "http://127.0.0.1:4096/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     restart: unless-stopped
 
   # ── Ollama ───────────────────────────────────────────────────────────────────
   ollama:
-    image: ollama/ollama:latest
-    ports:
-      - "11434:11434"
+    image: ollama/ollama:0.21.2
+    # Port 11434 is intentionally NOT published to the host – it is only reachable
+    # by other containers on the internal Docker networks defined below.
     volumes:
       - ollama_data:/root/.ollama
+    networks:
+      - backend
+      - frontend
     # NVIDIA GPU passthrough – remove the `deploy` block if no GPU is available.
     deploy:
       resources:
@@ -61,20 +69,41 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
     restart: unless-stopped
 
   # ── Open WebUI ───────────────────────────────────────────────────────────────
   open-webui:
-    image: ghcr.io/open-webui/open-webui:main
+    image: ghcr.io/open-webui/open-webui:v0.9.2
+    # Bound to localhost only – access via SSH tunnel or a TLS reverse proxy.
+    # SSH tunnel example: ssh -L 3000:localhost:3000 user@<remote-host>
     ports:
-      - "3000:8080"
+      - "127.0.0.1:3000:8080"
     environment:
       OLLAMA_BASE_URL: http://ollama:11434
     volumes:
       - openwebui_data:/app/backend/data
+    networks:
+      - frontend
     depends_on:
-      - ollama
+      ollama:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8080/health"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
     restart: unless-stopped
+
+networks:
+  backend:
+  frontend:
 
 volumes:
   ollama_data:
