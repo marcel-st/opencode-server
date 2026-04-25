@@ -1,0 +1,11 @@
+# Ignore build artifacts and runtime data created locally
+.env
+.env.*
+
+# Editor directories
+.idea/
+.vscode/
+
+# OS artifacts
+.DS_Store
+Thumbs.db
