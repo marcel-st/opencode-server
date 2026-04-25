@@ -66,11 +66,32 @@ services:
     image: ollama/ollama:0.21.2
     # Port 11434 is intentionally NOT published to the host – it is only reachable
     # by other containers on the internal Docker networks defined below.
+    environment:
+      # Enable Flash Attention – lower VRAM usage and faster token generation.
+      OLLAMA_FLASH_ATTENTION: "1"
+      # Keep the loaded model in VRAM indefinitely; avoids the cold-start
+      # reload penalty between requests.  Set to e.g. "10m" to unload after
+      # ten minutes of idle time.
+      OLLAMA_KEEP_ALIVE: "-1"
+      # Maximum number of requests processed in parallel.  Each additional
+      # slot requires extra VRAM; tune down if you run out of memory.
+      # Overridable via OLLAMA_NUM_PARALLEL in the .env file.
+      OLLAMA_NUM_PARALLEL: ${OLLAMA_NUM_PARALLEL:-4}
+      # Quantize the KV cache to 8-bit.  Cuts VRAM usage by ~50 % for the
+      # cache with negligible quality loss.  Use "q4_0" for even smaller
+      # footprint on memory-constrained GPUs.
+      OLLAMA_KV_CACHE_TYPE: "q8_0"
     volumes:
       - ollama_data:/root/.ollama
     networks:
       - backend
       - frontend
+    # Increase shared-memory available to CUDA kernels.
+    shm_size: '512m'
+    # Allow the CUDA runtime to lock GPU memory pages (improves throughput).
+    ulimits:
+      memlock: -1
+      stack: 67108864
     # NVIDIA GPU passthrough – remove the `deploy` block if no GPU is available.
     deploy:
       resources:
@@ -96,6 +117,12 @@ services:
       - "127.0.0.1:3000:8080"
     environment:
       OLLAMA_BASE_URL: http://ollama:11434
+      # Raise the HTTP client timeout so large-model responses are not cut off.
+      AIOHTTP_CLIENT_TIMEOUT: "300"
+      # Disable outbound community-sharing calls and telemetry to keep all
+      # traffic on the local network and avoid unnecessary latency.
+      ENABLE_COMMUNITY_SHARING: "false"
+      ENABLE_TELEMETRY: "false"
     volumes:
       - openwebui_data:/app/backend/data
     networks:

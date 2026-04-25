@@ -246,6 +246,50 @@ docker compose down -v
 
 ---
 
+## Performance Tuning
+
+The following environment variables control the most impactful ollama and Open
+WebUI performance knobs.  They are pre-configured with sensible defaults in
+`docker-compose.yaml`; the ones marked *(tunable)* can be overridden in your
+`.env` file.
+
+### Ollama
+
+| Variable | Default | Description |
+|---|---|---|
+| `OLLAMA_FLASH_ATTENTION` | `1` | Enables Flash Attention — reduces VRAM usage and speeds up token generation. |
+| `OLLAMA_KEEP_ALIVE` | `-1` | Keeps the model loaded in VRAM indefinitely. Set to e.g. `10m` to unload after ten minutes of idle time. |
+| `OLLAMA_NUM_PARALLEL` *(tunable)* | `4` | Number of requests processed simultaneously. Each extra slot uses additional VRAM — lower to `1`–`2` on GPUs with less than ~12 GB. |
+| `OLLAMA_KV_CACHE_TYPE` | `q8_0` | Quantizes the KV cache to 8-bit, cutting its VRAM footprint by ~50 % with negligible quality loss. Use `q4_0` for even tighter memory budgets. |
+
+The `ollama` service also sets:
+
+- **`shm_size: 512m`** — increases shared memory available to CUDA kernels,
+  which can reduce stalls on large batch operations.
+- **`ulimits: memlock: -1`** — allows the CUDA runtime to lock GPU memory
+  pages, which improves sustained throughput.
+
+### Open WebUI
+
+| Variable | Default | Description |
+|---|---|---|
+| `AIOHTTP_CLIENT_TIMEOUT` | `300` | HTTP client timeout (seconds) for requests to ollama. Prevents premature timeouts when running larger models. |
+| `ENABLE_COMMUNITY_SHARING` | `False` | Disables outbound calls to the Open WebUI community hub, keeping all traffic on the local network. |
+| `ENABLE_TELEMETRY` | `false` | Disables telemetry to avoid unnecessary latency on outbound connections. |
+
+### Tips
+
+- **Choose the right model size.** Fitting the model entirely in VRAM is the
+  single biggest performance lever — a model that overflows to system RAM can
+  be 10–50× slower.  See the model table in [Choose a model](#4--choose-a-model).
+- **Increase `OLLAMA_NUM_PARALLEL` only if you have spare VRAM.**  Each slot
+  holds an active KV cache in addition to the model weights.
+- **Flash Attention (`OLLAMA_FLASH_ATTENTION=1`)** requires a GPU with compute
+  capability ≥ 8.0 (Ampere / RTX 30-series or newer).  On older GPUs it is a
+  no-op.
+
+---
+
 ## Security Notes
 
 - **Credentials** are stored in `.env` on your laptop (gitignored). Never
