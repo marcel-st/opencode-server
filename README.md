@@ -37,13 +37,20 @@ cd opencode-server
 
 ### 2 — Set credentials
 
-Open `docker-compose.yaml` and change the placeholder values:
+Create your `.env` file from the provided template and set strong, unique credentials:
 
-```yaml
-environment:
-  OPENCODE_SERVER_USERNAME: opencode   # ← change me
-  OPENCODE_SERVER_PASSWORD: changeme   # ← change me (use a strong password!)
+```bash
+cp .env.example .env
 ```
+
+Then open `.env` in your editor and replace the placeholder values:
+
+```dotenv
+OPENCODE_SERVER_USERNAME=opencode   # ← change me
+OPENCODE_SERVER_PASSWORD=changeme   # ← change me (use a strong password!)
+```
+
+> **Note:** `.env` is listed in `.gitignore` and will never be committed to version control.
 
 ### 3 — Choose a model
 
@@ -77,11 +84,11 @@ docker compose up -d
 
 Services and their default ports:
 
-| Service | Port | Notes |
-|---------|------|-------|
-| opencode server | `4096` | Authenticated via basic-auth |
-| ollama API | `11434` | Ollama REST API |
-| open-webui | `3000` | Web UI |
+| Service | Port | Binding | Notes |
+|---------|------|---------|-------|
+| opencode server | `4096` | `0.0.0.0` | Authenticated via basic-auth |
+| open-webui | `3000` | `127.0.0.1` | Access via SSH tunnel (see below) |
+| ollama API | *(internal)* | Docker network only | Not published to the host |
 
 ### 5 — Connect from your laptop
 
@@ -90,7 +97,7 @@ opencode attach http://<username>:<password>@<remote-host>:4096
 ```
 
 Replace `<username>`, `<password>`, and `<remote-host>` with the values you
-set in `docker-compose.yaml` and the IP/hostname of the remote machine.
+set in `.env` and the IP/hostname of the remote machine.
 
 Example:
 ```bash
@@ -100,14 +107,27 @@ opencode attach http://opencode:s3cr3t@192.168.1.100:4096
 Once connected, you drive opencode exactly as you would locally — it runs on
 the remote host and uses the GPU-backed ollama instance for inference.
 
+### 6 — Access Open WebUI (optional)
+
+Open WebUI is bound to `127.0.0.1` on the remote host for security. To open
+it in your local browser, forward the port over SSH:
+
+```bash
+ssh -L 3000:localhost:3000 user@<remote-host>
+```
+
+Then visit [http://localhost:3000](http://localhost:3000) in your browser and
+create an admin account on first visit.
+
 ---
 
 ## Configuration
 
 ### Credentials
 
-Set `OPENCODE_SERVER_USERNAME` and `OPENCODE_SERVER_PASSWORD` in
-`docker-compose.yaml`. If `OPENCODE_SERVER_PASSWORD` is not set the server
+Credentials are read from the `.env` file (see `.env.example`). Copy the
+example file and set `OPENCODE_SERVER_USERNAME` and `OPENCODE_SERVER_PASSWORD`
+before starting the stack. If `OPENCODE_SERVER_PASSWORD` is not set the server
 starts **without authentication** (a warning is printed to the logs).
 
 ### Provider / model
@@ -177,10 +197,16 @@ docker compose down -v
 
 ## Security Notes
 
-- Always use a **strong, unique password** for `OPENCODE_SERVER_PASSWORD`.
-- The opencode port (`4096`) and the ollama API port (`11434`) should be
-  protected by a firewall or VPN — do not expose them directly to the internet.
-- The open-webui port (`3000`) ships with its own account system; create an
-  admin account on first visit.
-- Consider putting the opencode server behind a reverse proxy with TLS
-  (e.g. nginx + Let's Encrypt / Caddy) for production use.
+- **Credentials** are stored in `.env` (gitignored). Never commit `.env` to version control.
+  Use a strong, unique password for `OPENCODE_SERVER_PASSWORD`.
+- **Ollama API** (port `11434`) is deliberately not published to the host — it is
+  reachable only by other containers on the internal Docker network.
+- **Open WebUI** (port `3000`) is bound to `127.0.0.1` and only accessible via an
+  SSH tunnel or a TLS reverse proxy. Create an admin account on first visit.
+- **opencode** runs as a non-root user inside its container, limiting the blast radius
+  of any potential compromise.
+- The **opencode port** (`4096`) should still be protected by a firewall or VPN if
+  you do not want it exposed to the internet.
+- For production deployments, put the opencode server behind a reverse proxy with TLS
+  (e.g. nginx + Let's Encrypt / Caddy) to encrypt traffic.
+
