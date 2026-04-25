@@ -10,3 +10,7 @@
 # OS artifacts
 .DS_Store
 Thumbs.db
+
+# Local diagnostic outputs
+provider.output
+providers.output
