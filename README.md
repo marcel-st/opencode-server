@@ -178,6 +178,22 @@ Example:
 opencode attach https://opencode:s3cr3t@opencode.example.com
 ```
 
+If URL-embedded credentials are rejected by your proxy/TLS setup, set
+credentials through environment variables instead (recommended fallback):
+
+```bash
+OPENCODE_SERVER_USERNAME=<username> \
+OPENCODE_SERVER_PASSWORD=<password> \
+opencode attach https://<your-domain>
+```
+
+Example:
+```bash
+OPENCODE_SERVER_USERNAME=opencode \
+OPENCODE_SERVER_PASSWORD=s3cr3t \
+opencode attach https://opencode.example.com
+```
+
 **2. Configure your proxy for SSE (Server-Sent Events).**
 
 `opencode attach` drives the TUI through a long-lived SSE stream
