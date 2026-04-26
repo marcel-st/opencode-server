@@ -42,8 +42,9 @@ services:
       # Credentials are read from the .env file (see .env.example).
       OPENCODE_SERVER_USERNAME: ${OPENCODE_SERVER_USERNAME}
       OPENCODE_SERVER_PASSWORD: ${OPENCODE_SERVER_PASSWORD}
-      # Keep Exa-backed built-in websearch available as a fallback.
-      OPENCODE_ENABLE_EXA: ${OPENCODE_ENABLE_EXA:-true}
+      # Open WebUI handles web RAG for opencode sessions; keep native
+      # model-level websearch disabled for local models that imitate tool calls.
+      OPENCODE_ENABLE_EXA: ${OPENCODE_ENABLE_EXA:-false}
       # Custom websearch/webfetch overrides query local SearXNG.
       OPENCODE_SEARXNG_URL: ${OPENCODE_SEARXNG_URL:-http://searxng:8080}
 

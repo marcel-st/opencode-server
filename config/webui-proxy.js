@@ -10,6 +10,7 @@ const { URL } = require('url');
 
 const UPSTREAM = process.env.OPENWEBUI_URL || 'http://open-webui:8080';
 const PORT = 8090;
+const OPENWEBUI_RAG_TOOLS = new Set(['websearch', 'webfetch']);
 
 const upstream = new URL(UPSTREAM);
 
@@ -20,6 +21,33 @@ function isChatCompletionRequest(req) {
 function shouldTransformStream(req, res) {
   const contentType = res.headers['content-type'] || '';
   return isChatCompletionRequest(req) && contentType.includes('text/event-stream') && res.statusCode < 400;
+}
+
+function toolName(tool) {
+  if (!tool || typeof tool !== 'object') return '';
+  if (typeof tool.name === 'string') return tool.name;
+  if (tool.function && typeof tool.function.name === 'string') return tool.function.name;
+  return '';
+}
+
+function isOpenWebUIRagTool(tool) {
+  return OPENWEBUI_RAG_TOOLS.has(toolName(tool));
+}
+
+function stripOpenWebUIRagTools(json) {
+  if (!Array.isArray(json.tools)) return;
+
+  const tools = json.tools.filter(tool => !isOpenWebUIRagTool(tool));
+  if (tools.length > 0) {
+    json.tools = tools;
+  } else {
+    delete json.tools;
+    delete json.tool_choice;
+  }
+
+  if (json.tool_choice && typeof json.tool_choice === 'object' && isOpenWebUIRagTool(json.tool_choice)) {
+    delete json.tool_choice;
+  }
 }
 
 function filterOpenAIEvent(event) {
@@ -82,6 +110,7 @@ http.createServer((clientReq, clientRes) => {
       try {
         const json = JSON.parse(body.toString('utf8'));
         json.features = { ...(json.features || {}), web_search: true };
+        stripOpenWebUIRagTools(json);
         body = Buffer.from(JSON.stringify(json), 'utf8');
         headers['content-length'] = String(body.length);
         headers['content-type'] = 'application/json';

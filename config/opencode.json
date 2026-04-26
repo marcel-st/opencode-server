@@ -42,7 +42,9 @@
   ],
 
   "permission": {
-    "skill": "deny"
+    "skill": "deny",
+    "websearch": "deny",
+    "webfetch": "deny"
   },
 
   "model": "open-webui/qwen2.5-coder:7b"

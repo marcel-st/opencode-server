@@ -294,32 +294,25 @@ per-message with the globe icon next to the chat input.
 
 For opencode sessions, the server routes LLM calls through Open WebUI via the
 local `webui-proxy.js` process. The proxy injects
-`{"features":{"web_search":true}}` into chat completion requests and drops
+`{"features":{"web_search":true}}` into chat completion requests, removes
+OpenCode's `websearch`/`webfetch` tool schemas from the request, and drops
 Open WebUI status/citation/search metadata events from the streamed response.
-Without that normalization, opencode-compatible clients can display raw JSON
-events instead of a normal assistant answer.
 
-For the `opencode` server itself, this stack ships custom `websearch` and
-`webfetch` tool overrides that route queries through local SearXNG instead of
-external providers — no API keys required. These tools work when the model
-makes a proper structured tool call, which depends on the model and Ollama's
-tool-calling support for it. Their search-style responses are formatted as
-plain text summaries, not JSON, so weaker local models are less likely to echo
-tool output verbatim.
+That split is intentional: Open WebUI owns web RAG, while OpenCode still owns
+coding tools. Local Ollama models often print JSON-shaped tool calls such as
+`{"name":"websearch","arguments":{...}}` when shown search tool schemas through
+OpenAI-compatible providers. Removing only the web tools avoids that failure
+mode without disabling normal file, shell, and edit tools.
 
-| Tool | Description |
-|------|-------------|
-| `websearch` | Search via SearXNG. Accepts `query` (required) and optional `site` to restrict results to a domain. |
-| `webfetch` | Fetch a URL and return its text content. Falls back to a SearXNG search if the input is not a URL. |
-
-`OPENCODE_ENABLE_EXA=true` is still enabled as a fallback so opencode's
-built-in Exa-backed `websearch` can be used if the custom override is
-unavailable.
+This repository still includes local SearXNG-backed `websearch` and `webfetch`
+tool definitions for experimentation with models that have reliable structured
+tool calling. In the default Open WebUI setup they are denied in
+`config/opencode.json` and stripped by the proxy.
 
 Defaults are configured in `docker-compose.yaml`:
 
 - `ENABLE_RAG_WEB_SEARCH=true`
-- `OPENCODE_ENABLE_EXA=true`
+- `OPENCODE_ENABLE_EXA=false`
 - `RAG_WEB_SEARCH_ENGINE=searxng`
 - `SEARXNG_QUERY_URL=http://searxng:8080/search?q=<query>&format=json`
 
@@ -329,15 +322,15 @@ You can tune result fan-out in `.env` (see `.env.example`):
   installed in the server image
 - `OPENWEBUI_API_KEY` must be set to a valid Open WebUI API key for the
   OpenAI-compatible provider path
-- `OPENCODE_ENABLE_EXA` (default `true`) keeps Exa-backed built-in `websearch`
-  available as fallback
+- `OPENCODE_ENABLE_EXA` (default `false`) keeps native model-level websearch
+  disabled so Open WebUI can handle RAG before generation
 - `OPENCODE_SEARXNG_URL` (default `http://searxng:8080`) is used by the custom
   `websearch` and `webfetch` tools
 - `RAG_WEB_SEARCH_RESULT_COUNT` (default `5`)
 - `RAG_WEB_SEARCH_CONCURRENT_REQUESTS` (default `10`)
 
-If attached sessions still claim web tools need an API key even with
-`OPENCODE_ENABLE_EXA=true`, rebuild with the latest opencode release:
+If attached sessions still expose stale web-tool behavior after changing this
+configuration, rebuild with the latest opencode release:
 
 ```bash
 docker compose build --no-cache opencode
@@ -444,19 +437,20 @@ docker compose logs --tail=120 searxng open-webui
 Some SearXNG engine warnings (for optional engines) are expected and usually
 non-fatal as long as the `searxng` container is up.
 
-### opencode shows raw JSON for web search
+### opencode prints JSON-shaped websearch calls
 
 Rebuild and restart the `opencode` image so the Open WebUI stream-normalizing
-proxy and plain-text search tool output are baked into the container:
+proxy and web-tool filtering are baked into the container:
 
 ```bash
 docker compose build opencode
 docker compose up -d --no-deps opencode
 ```
 
-Then confirm `OPENWEBUI_API_KEY` is set in `.env`; a blank key means opencode
-can attach to the server but Open WebUI-backed completions may fail or bypass
-the intended RAG path.
+Then confirm `OPENWEBUI_API_KEY` is set in `.env` and
+`OPENCODE_ENABLE_EXA=false`. A blank key means opencode can attach to the
+server but Open WebUI-backed completions may fail or bypass the intended RAG
+path.
 
 ### ERR_EMPTY_RESPONSE after rebuilding the opencode container
 
