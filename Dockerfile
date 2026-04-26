@@ -6,7 +6,7 @@ ARG OPENCODE_VERSION=latest
 
 # Install curl (used by the Docker health check) and create a non-root user
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl ca-certificates \
+    && apt-get install -y --no-install-recommends curl ca-certificates gettext-base \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --system opencode \
     && useradd --system --gid opencode --create-home --home-dir /home/opencode opencode
@@ -22,6 +22,9 @@ RUN npm install -g "opencode-ai@${OPENCODE_VERSION}" \
 RUN mkdir -p /home/opencode/.config/opencode \
              /home/opencode/.local/share/opencode \
     && chown -R opencode:opencode /home/opencode
+
+COPY --chown=opencode:opencode docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 COPY --chown=opencode:opencode config/opencode.json /home/opencode/.config/opencode/opencode.json
 COPY --chown=opencode:opencode config/package.json /home/opencode/.config/opencode/package.json
@@ -43,4 +46,5 @@ USER opencode
 EXPOSE 4096
 
 # Run opencode in headless server mode, listening on all interfaces
+ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["opencode", "serve"]

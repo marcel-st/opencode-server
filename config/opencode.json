@@ -7,11 +7,12 @@
   },
 
   "provider": {
-    "ollama": {
+    "open-webui": {
       "npm": "@ai-sdk/openai-compatible",
-      "name": "Ollama (local)",
+      "name": "Open WebUI",
       "options": {
-        "baseURL": "http://ollama:11434/v1"
+        "baseURL": "http://open-webui:8080/openai",
+        "apiKey": "${OPENWEBUI_API_KEY}"
       },
       "models": {
         "llama3.1:8b": {
@@ -37,12 +38,12 @@
   },
 
   "enabled_providers": [
-    "ollama"
+    "open-webui"
   ],
 
   "permission": {
     "skill": "deny"
   },
 
-  "model": "ollama/llama3.1:8b"
+  "model": "open-webui/llama3.1:8b"
 }
