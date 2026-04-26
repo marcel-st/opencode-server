@@ -162,7 +162,9 @@ services:
 
   # ── SearXNG (private web search backend for Open WebUI) ────────────────────
   searxng:
-    image: searxng/searxng:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.searxng
     environment:
       BASE_URL: http://searxng:8080/
       INSTANCE_NAME: opencode-searxng

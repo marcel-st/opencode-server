@@ -406,8 +406,9 @@ docker compose exec ollama ollama pull <model>
 docker compose build opencode
 docker compose up -d opencode
 
-# Restart web search components (Open WebUI + SearXNG)
-docker compose restart searxng open-webui
+# Rebuild/restart web search components after SearXNG config changes
+docker compose build searxng
+docker compose up -d searxng open-webui
 
 # Restart the opencode server
 docker compose restart opencode
@@ -445,6 +446,16 @@ docker compose logs --tail=120 searxng open-webui
 
 Some SearXNG engine warnings (for optional engines) are expected and usually
 non-fatal as long as the `searxng` container is up.
+
+If the opencode proxy logs `SearXNG request failed: 403 Forbidden`, rebuild
+and recreate the `searxng` service. The custom SearXNG image bakes in
+`config/searxng/settings.yml`, which enables JSON output via
+`search.formats: [html, json]`:
+
+```bash
+docker compose build searxng
+docker compose up -d --no-deps searxng
+```
 
 For opencode sessions, also inspect the `opencode` logs. On startup the proxy
 logs its version and SearXNG URL. For search-grounded prompts it should log

@@ -1,0 +1,6 @@
+FROM searxng/searxng:latest
+
+# The stock image may reject JSON search output with 403 unless json is listed
+# in search.formats. Bake the config into the image so this works with a remote
+# Docker daemon without relying on host bind mounts.
+COPY config/searxng/settings.yml /etc/searxng/settings.yml
