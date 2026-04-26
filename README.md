@@ -297,6 +297,10 @@ local `webui-proxy.js` process. The proxy injects
 `{"features":{"web_search":true}}` into chat completion requests, removes
 OpenCode tool schemas from the request, and drops
 Open WebUI status/citation/search metadata events from the streamed response.
+For prompts that explicitly ask for web/current/latest information, the proxy
+also queries the internal SearXNG service directly and prepends the top search
+results to the model context. This makes search grounding deterministic even
+when Open WebUI's API-side web-search trigger does not fire for a local model.
 
 That split is intentional: Open WebUI owns RAG before generation, while this
 Open WebUI provider path is treated as non-tool-calling. The proxy also adds a
@@ -328,7 +332,8 @@ You can tune result fan-out in `.env` (see `.env.example`):
 - `OPENCODE_ENABLE_EXA` (default `false`) keeps native model-level websearch
   disabled so Open WebUI can handle RAG before generation
 - `OPENCODE_SEARXNG_URL` (default `http://searxng:8080`) is used by the custom
-  `websearch` and `webfetch` tools
+  `websearch` and `webfetch` tools, and by the Open WebUI proxy for direct
+  search-result injection
 - `RAG_WEB_SEARCH_RESULT_COUNT` (default `5`)
 - `RAG_WEB_SEARCH_CONCURRENT_REQUESTS` (default `10`)
 
@@ -439,6 +444,14 @@ docker compose logs --tail=120 searxng open-webui
 
 Some SearXNG engine warnings (for optional engines) are expected and usually
 non-fatal as long as the `searxng` container is up.
+
+For opencode sessions, also inspect the `opencode` logs. The local
+`webui-proxy.js` process logs `SearXNG search failed` if it cannot inject
+search results into the request:
+
+```bash
+docker compose logs --tail=120 opencode
+```
 
 ### opencode prints JSON-shaped tool calls
 
