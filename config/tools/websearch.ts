@@ -2,6 +2,23 @@ import { tool } from "../node_modules/@opencode-ai/plugin/dist/index.js"
 
 const DEFAULT_LIMIT = 5
 
+function formatSearchResults(
+  query: string,
+  results: Array<{ rank: number; title: string; url: string; snippet: string }>,
+): string {
+  if (results.length === 0) return `No search results found for "${query}".`
+
+  return [
+    `Search results for "${query}":`,
+    "",
+    ...results.map(result => [
+      `${result.rank}. ${result.title}`,
+      `   URL: ${result.url || "(no URL)"}`,
+      `   Snippet: ${result.snippet || "No snippet available."}`,
+    ].join("\n")),
+  ].join("\n")
+}
+
 export default tool({
   description: "Search the web using local SearXNG and return top results with URLs and snippets.",
   args: {
@@ -47,6 +64,6 @@ export default tool({
       snippet: item.content || "",
     }))
 
-    return JSON.stringify({ query: fullQuery, results }, null, 2)
+    return formatSearchResults(fullQuery, results)
   },
 })

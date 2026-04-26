@@ -2,6 +2,23 @@ import { tool } from "../node_modules/@opencode-ai/plugin/dist/index.js"
 
 const MAX_RESPONSE_CHARS = 15000
 
+function formatSearchResults(
+  query: string,
+  results: Array<{ rank: number; title: string; url: string; snippet: string }>,
+): string {
+  if (results.length === 0) return `No search results found for "${query}".`
+
+  return [
+    `Search results for "${query}":`,
+    "",
+    ...results.map(result => [
+      `${result.rank}. ${result.title}`,
+      `   URL: ${result.url || "(no URL)"}`,
+      `   Snippet: ${result.snippet || "No snippet available."}`,
+    ].join("\n")),
+  ].join("\n")
+}
+
 function htmlToText(input: string): string {
   return input
     .replace(/<script[\s\S]*?<\/script>/gi, "")
@@ -52,7 +69,7 @@ export default tool({
         snippet: item.content || "",
       }))
 
-      return JSON.stringify({ query: input, results }, null, 2)
+      return formatSearchResults(input, results)
     }
 
     const response = await fetch(input, { redirect: "follow" })

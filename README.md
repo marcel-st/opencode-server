@@ -263,33 +263,49 @@ The relevant fields are:
 ```jsonc
 {
   "provider": {
-    "ollama": {
-      "npm": "@ai-sdk/openai-compatible",   // use the bundled OpenAI-compat SDK
+    "open-webui": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Open WebUI",
       "options": {
-        "name": "ollama",
-        "baseURL": "http://ollama:11434/v1" // service name from docker-compose
+        "baseURL": "http://localhost:8090/api",
+        "apiKey": "${OPENWEBUI_API_KEY}"
       }
     }
   },
-  "model": "ollama/llama3.1:8b"             // default model (provider/model-tag)
+  "model": "open-webui/qwen2.5-coder:7b"
 }
 ```
 
-The `baseURL` points to the `ollama` service inside the Docker network. You
-can change `model` to any tag you have pulled in ollama.
+The `baseURL` points to the local proxy started inside the `opencode`
+container. That proxy forwards requests to Open WebUI, enables
+`features.web_search`, and filters Open WebUI's UI-only RAG/search stream
+events so opencode receives a normal OpenAI-compatible stream.
+
+Set `OPENWEBUI_API_KEY` in `.env` to an API key generated in Open WebUI
+(`Settings` -> `Account` -> `API Keys`). You can change `model` to any model
+Open WebUI exposes and that you have pulled in ollama.
 
 ### Internet search (SearXNG)
 
-**Open WebUI** is the recommended interface for web-augmented conversations.
-It is pre-configured to use the internal `searxng` service for RAG web search
-out of the box. After `docker compose up -d`, enable web search per-message
-in Open WebUI by clicking the globe icon next to the chat input.
+**Open WebUI** is the RAG/search layer for both browser chats and opencode
+sessions. It is pre-configured to use the internal `searxng` service for RAG
+web search out of the box. Browser users can still toggle web search
+per-message with the globe icon next to the chat input.
+
+For opencode sessions, the server routes LLM calls through Open WebUI via the
+local `webui-proxy.js` process. The proxy injects
+`{"features":{"web_search":true}}` into chat completion requests and drops
+Open WebUI status/citation/search metadata events from the streamed response.
+Without that normalization, opencode-compatible clients can display raw JSON
+events instead of a normal assistant answer.
 
 For the `opencode` server itself, this stack ships custom `websearch` and
 `webfetch` tool overrides that route queries through local SearXNG instead of
 external providers — no API keys required. These tools work when the model
 makes a proper structured tool call, which depends on the model and Ollama's
-tool-calling support for it.
+tool-calling support for it. Their search-style responses are formatted as
+plain text summaries, not JSON, so weaker local models are less likely to echo
+tool output verbatim.
 
 | Tool | Description |
 |------|-------------|
@@ -311,6 +327,8 @@ You can tune result fan-out in `.env` (see `.env.example`):
 
 - `OPENCODE_VERSION` (default `latest`) controls which `opencode-ai` version is
   installed in the server image
+- `OPENWEBUI_API_KEY` must be set to a valid Open WebUI API key for the
+  OpenAI-compatible provider path
 - `OPENCODE_ENABLE_EXA` (default `true`) keeps Exa-backed built-in `websearch`
   available as fallback
 - `OPENCODE_SEARXNG_URL` (default `http://searxng:8080`) is used by the custom
@@ -327,8 +345,8 @@ docker compose up -d --force-recreate --no-deps opencode
 ```
 
 The rebuild is required whenever you change `config/opencode.json`,
-`config/package.json`, or files in `config/tools/` because they are baked into
-the `opencode` image.
+`config/package.json`, `config/webui-proxy.js`, `docker-entrypoint.sh`, or
+files in `config/tools/` because they are baked into the `opencode` image.
 
 Then verify inside the running container:
 
@@ -426,6 +444,20 @@ docker compose logs --tail=120 searxng open-webui
 Some SearXNG engine warnings (for optional engines) are expected and usually
 non-fatal as long as the `searxng` container is up.
 
+### opencode shows raw JSON for web search
+
+Rebuild and restart the `opencode` image so the Open WebUI stream-normalizing
+proxy and plain-text search tool output are baked into the container:
+
+```bash
+docker compose build opencode
+docker compose up -d --no-deps opencode
+```
+
+Then confirm `OPENWEBUI_API_KEY` is set in `.env`; a blank key means opencode
+can attach to the server but Open WebUI-backed completions may fail or bypass
+the intended RAG path.
+
 ### ERR_EMPTY_RESPONSE after rebuilding the opencode container
 
 If you front the opencode server with a reverse proxy configured as a **TCP
@@ -473,6 +505,9 @@ The `ollama` service also sets:
 | Variable | Default | Description |
 |---|---|---|
 | `AIOHTTP_CLIENT_TIMEOUT` | `300` | HTTP client timeout (seconds) for requests to ollama. Prevents premature timeouts when running larger models. |
+| `ENABLE_RAG_WEB_SEARCH` | `true` | Enables Open WebUI's RAG web-search pipeline. opencode requests are routed through Open WebUI and have this feature enabled by the local proxy. |
+| `RAG_WEB_SEARCH_ENGINE` | `searxng` | Uses the internal SearXNG container as Open WebUI's search backend. |
+| `SEARXNG_QUERY_URL` | `http://searxng:8080/search?q=<query>&format=json` | Internal SearXNG query URL used by Open WebUI. |
 | `ENABLE_COMMUNITY_SHARING` | `False` | Disables outbound calls to the Open WebUI community hub, keeping all traffic on the local network. |
 | `ENABLE_TELEMETRY` | `false` | Disables telemetry to avoid unnecessary latency on outbound connections. |
 
@@ -528,4 +563,3 @@ GitHub templates and ownership metadata:
 - **Issue templates:** `.github/ISSUE_TEMPLATE/`
 - **Pull request template:** `.github/pull_request_template.md`
 - **Code owners:** `.github/CODEOWNERS`
-
