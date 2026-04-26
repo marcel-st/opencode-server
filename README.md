@@ -295,19 +295,22 @@ per-message with the globe icon next to the chat input.
 For opencode sessions, the server routes LLM calls through Open WebUI via the
 local `webui-proxy.js` process. The proxy injects
 `{"features":{"web_search":true}}` into chat completion requests, removes
-OpenCode's `websearch`/`webfetch` tool schemas from the request, and drops
+OpenCode tool schemas from the request, and drops
 Open WebUI status/citation/search metadata events from the streamed response.
 
-That split is intentional: Open WebUI owns web RAG, while OpenCode still owns
-coding tools. Local Ollama models often print JSON-shaped tool calls such as
-`{"name":"websearch","arguments":{...}}` when shown search tool schemas through
-OpenAI-compatible providers. Removing only the web tools avoids that failure
-mode without disabling normal file, shell, and edit tools.
+That split is intentional: Open WebUI owns RAG before generation, while this
+Open WebUI provider path is treated as non-tool-calling. The proxy also adds a
+short guard instruction telling the model not to print tool-call JSON. Local
+Ollama models often print JSON-shaped tool calls such as
+`{"name":"todowrite","arguments":{...}}` or
+`{"name":"websearch","arguments":{...}}` when shown OpenCode tool schemas
+through OpenAI-compatible providers. Stripping tool schemas avoids that failure
+mode and lets Open WebUI return a normal assistant answer.
 
 This repository still includes local SearXNG-backed `websearch` and `webfetch`
 tool definitions for experimentation with models that have reliable structured
-tool calling. In the default Open WebUI setup they are denied in
-`config/opencode.json` and stripped by the proxy.
+tool calling. In the default Open WebUI setup, native websearch is disabled and
+the proxy strips all tool schemas before forwarding requests to Open WebUI.
 
 Defaults are configured in `docker-compose.yaml`:
 
@@ -437,10 +440,10 @@ docker compose logs --tail=120 searxng open-webui
 Some SearXNG engine warnings (for optional engines) are expected and usually
 non-fatal as long as the `searxng` container is up.
 
-### opencode prints JSON-shaped websearch calls
+### opencode prints JSON-shaped tool calls
 
 Rebuild and restart the `opencode` image so the Open WebUI stream-normalizing
-proxy and web-tool filtering are baked into the container:
+proxy and tool-schema stripping are baked into the container:
 
 ```bash
 docker compose build opencode

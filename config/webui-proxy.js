@@ -1,16 +1,15 @@
 'use strict';
 
 // Proxy that injects {"features":{"web_search":true}} into every chat
-// completion request so Open WebUI handles SearXNG search itself rather
-// than relying on model-level tool calling (which local 8B models don't
-// support reliably).
+// completion request so Open WebUI handles SearXNG search itself. It also
+// strips OpenCode tool schemas because local Ollama models commonly print
+// JSON-shaped tool calls instead of returning structured tool_calls.
 
 const http = require('http');
 const { URL } = require('url');
 
 const UPSTREAM = process.env.OPENWEBUI_URL || 'http://open-webui:8080';
 const PORT = 8090;
-const OPENWEBUI_RAG_TOOLS = new Set(['websearch', 'webfetch']);
 
 const upstream = new URL(UPSTREAM);
 
@@ -23,31 +22,23 @@ function shouldTransformStream(req, res) {
   return isChatCompletionRequest(req) && contentType.includes('text/event-stream') && res.statusCode < 400;
 }
 
-function toolName(tool) {
-  if (!tool || typeof tool !== 'object') return '';
-  if (typeof tool.name === 'string') return tool.name;
-  if (tool.function && typeof tool.function.name === 'string') return tool.function.name;
-  return '';
+function stripToolCalling(json) {
+  delete json.tools;
+  delete json.tool_choice;
+  delete json.parallel_tool_calls;
 }
 
-function isOpenWebUIRagTool(tool) {
-  return OPENWEBUI_RAG_TOOLS.has(toolName(tool));
-}
+function addNoToolCallingInstruction(json) {
+  if (!Array.isArray(json.messages)) return;
 
-function stripOpenWebUIRagTools(json) {
-  if (!Array.isArray(json.tools)) return;
-
-  const tools = json.tools.filter(tool => !isOpenWebUIRagTool(tool));
-  if (tools.length > 0) {
-    json.tools = tools;
-  } else {
-    delete json.tools;
-    delete json.tool_choice;
-  }
-
-  if (json.tool_choice && typeof json.tool_choice === 'object' && isOpenWebUIRagTool(json.tool_choice)) {
-    delete json.tool_choice;
-  }
+  json.messages.unshift({
+    role: 'system',
+    content: [
+      'In this Open WebUI provider path, OpenCode tool calling is disabled.',
+      'Do not print JSON tool call objects such as {"name":"todowrite","arguments":{...}}.',
+      'Answer the user directly. Web search is handled by Open WebUI before generation.',
+    ].join(' '),
+  });
 }
 
 function filterOpenAIEvent(event) {
@@ -110,7 +101,8 @@ http.createServer((clientReq, clientRes) => {
       try {
         const json = JSON.parse(body.toString('utf8'));
         json.features = { ...(json.features || {}), web_search: true };
-        stripOpenWebUIRagTools(json);
+        stripToolCalling(json);
+        addNoToolCallingInstruction(json);
         body = Buffer.from(JSON.stringify(json), 'utf8');
         headers['content-length'] = String(body.length);
         headers['content-type'] = 'application/json';
