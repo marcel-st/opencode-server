@@ -45,5 +45,5 @@
     "skill": "deny"
   },
 
-  "model": "open-webui/llama3.1:8b"
+  "model": "open-webui/qwen2.5-coder:7b"
 }
