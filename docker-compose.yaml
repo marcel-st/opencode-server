@@ -3,8 +3,8 @@
 #
 # Designed to be executed from a LOCAL machine whose Docker client is pointed
 # at a REMOTE Docker host (e.g. via a Docker context or the DOCKER_HOST
-# environment variable).  All services run on the remote host; only the .env
-# file and this Compose file need to exist locally.
+# environment variable).  All services run on the remote host; this repository
+# is used as the local Docker build context and the .env file supplies secrets.
 #
 # Remote Docker context setup (one-time, on your laptop):
 #   docker context create remote \
@@ -15,7 +15,7 @@
 #   opencode   – headless opencode server (secured with basic-auth)
 #   ollama     – local LLM runtime with NVIDIA GPU passthrough
 #   open-webui – browser UI for managing / chatting with ollama models
-#   searxng    – private metasearch engine used for web search in Open WebUI
+#   searxng    – private JSON-enabled metasearch engine for Open WebUI/opencode
 #
 # Quick start (run from your laptop after setting up the remote context)
 #   1. cp .env.example .env  and set OPENCODE_SERVER_USERNAME / PASSWORD.
@@ -45,13 +45,12 @@ services:
       # Open WebUI handles web RAG for opencode sessions; keep native
       # model-level websearch disabled for local models that imitate tool calls.
       OPENCODE_ENABLE_EXA: ${OPENCODE_ENABLE_EXA:-false}
-      # Custom websearch/webfetch overrides query local SearXNG.
+      # Local SearXNG URL used by the proxy for direct search-result injection.
       OPENCODE_SEARXNG_URL: ${OPENCODE_SEARXNG_URL:-http://searxng:8080}
 
       # ── Provider: Open WebUI ─────────────────────────────────────────────────
       # API key for Open WebUI's OpenAI-compatible endpoint.  Set this in .env.
-      # opencode routes all LLM calls through Open WebUI, which in turn uses
-      # Ollama + the built-in SearXNG RAG pipeline.
+      # opencode routes all LLM calls through Open WebUI via webui-proxy.
       OPENWEBUI_API_KEY: ${OPENWEBUI_API_KEY}
 
     volumes:
@@ -160,7 +159,7 @@ services:
       start_period: 60s
     restart: unless-stopped
 
-  # ── SearXNG (private web search backend for Open WebUI) ────────────────────
+  # ── SearXNG (private JSON-enabled search backend) ──────────────────────────
   searxng:
     build:
       context: .

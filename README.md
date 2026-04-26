@@ -11,14 +11,14 @@ The stack is:
 | **opencode** | Headless opencode server (basic-auth protected) |
 | **ollama** | Local LLM runtime with NVIDIA GPU pass-through |
 | **open-webui** | Browser UI for chatting with and managing ollama models |
-| **searxng** | Private metasearch backend used for internet search in Open WebUI |
+| **searxng** | Private metasearch backend with JSON search enabled for Open WebUI and opencode |
 
 > **Architecture note:** `docker compose` is executed from your **local
 > laptop**.  The Docker daemon (and therefore all containers) run on the
 > **remote server**.  Only the `.env` file and this repository need to exist
 > locally — no files are bind-mounted from the remote host's filesystem at
-> runtime (the opencode configuration is baked into the Docker image at build
-> time).
+> runtime. The opencode and SearXNG configuration is baked into their Docker
+> images at build time.
 
 ---
 
@@ -78,6 +78,7 @@ Then open `.env` in your editor and replace the placeholder values:
 ```dotenv
 OPENCODE_SERVER_USERNAME=opencode          # ← change me
 OPENCODE_SERVER_PASSWORD='changeme'        # ← change me (use a strong password!)
+OPENWEBUI_API_KEY=sk-your-open-webui-api-key-here
 ```
 
 > **Quoting passwords with special characters:** Docker Compose parses `.env`
@@ -97,10 +98,20 @@ OPENCODE_SERVER_PASSWORD='changeme'        # ← change me (use a strong passwor
 > resolved values are passed as environment variables to the containers on
 > the remote host — the file itself never leaves your machine.
 
+`OPENWEBUI_API_KEY` must be a real key from Open WebUI
+(`Settings` -> `Account` -> `API Keys`). On a fresh Open WebUI install, start
+the stack once, create the admin account and API key in the browser, update
+`.env`, then recreate `opencode`:
+
+```bash
+docker compose up -d
+docker compose up -d --force-recreate --no-deps opencode
+```
+
 ### 4 — Choose a model
 
 Edit `config/opencode.json` to set the model you want to use (the default is
-`llama3.1:8b`).
+`qwen2.5-coder:7b`).
 
 Once you have settled on a model, build the image (which bakes the
 configuration in) and start the ollama service so you can pull the model
@@ -112,18 +123,18 @@ docker compose build
 
 # Start only the ollama service (the other services are not started yet)
 docker compose up -d ollama
-docker compose exec ollama ollama pull llama3.1:8b   # default
+docker compose exec ollama ollama pull qwen2.5-coder:7b   # default
 ```
 
 Popular coding models available on [ollama.com/library](https://ollama.com/library):
 
 | Model | VRAM | Notes |
 |-------|------|-------|
-| `llama3.1:8b` | ~5 GB | Default — strong general-purpose model |
+| `llama3.1:8b` | ~5 GB | Strong general-purpose model |
 | `mistral:7b` | ~4 GB | Strong general-purpose model |
 | `ministral-3:8b` | ~5 GB | Compact Mistral variant |
 | `codellama:7b` | ~4 GB | Coding-focused |
-| `qwen2.5-coder:7b` | ~8 GB | Coding-focused |
+| `qwen2.5-coder:7b` | ~8 GB | Default — coding-focused |
 | `gemma4:e4b` | ~8 GB | Google model |
 | `deepseek-coder-v2:16b` | ~20 GB | Strong coding + reasoning |
 
@@ -144,7 +155,7 @@ Services and their default ports (on the **remote host**):
 |---------|------|---------|-------|
 | opencode server | `4096` | `0.0.0.0` | Authenticated via basic-auth |
 | open-webui | `3000` | `127.0.0.1` | Access via SSH tunnel (see below) |
-| searxng | *(internal)* | Docker network only | Used by Open WebUI for web search |
+| searxng | *(internal)* | Docker network only | JSON-enabled search backend |
 | ollama API | *(internal)* | Docker network only | Not published to the host |
 
 After startup, confirm all services are healthy/up:
@@ -251,11 +262,12 @@ authentication** (a warning is printed to the logs).
 ### Provider / model
 
 `config/opencode.json` configures the opencode server. The file is copied into
-the Docker image at build time, so **rebuild the image after any change**:
+the Docker image at build time, so **rebuild the opencode image after any
+opencode config or proxy change**:
 
 ```bash
 docker compose build opencode
-docker compose up -d opencode
+docker compose up -d --force-recreate --no-deps opencode
 ```
 
 The relevant fields are:
@@ -277,9 +289,11 @@ The relevant fields are:
 ```
 
 The `baseURL` points to the local proxy started inside the `opencode`
-container. That proxy forwards requests to Open WebUI, enables
-`features.web_search`, and filters Open WebUI's UI-only RAG/search stream
-events so opencode receives a normal OpenAI-compatible stream.
+container. That proxy forwards requests to Open WebUI, enables web search,
+strips OpenCode tool schemas for this local-model provider path, injects
+SearXNG results for current/web/latest prompts, and filters Open WebUI's
+UI-only RAG/search stream events so opencode receives a normal
+OpenAI-compatible stream.
 
 Set `OPENWEBUI_API_KEY` in `.env` to an API key generated in Open WebUI
 (`Settings` -> `Account` -> `API Keys`). You can change `model` to any model
@@ -323,6 +337,8 @@ Defaults are configured in `docker-compose.yaml`:
 - `OPENCODE_ENABLE_EXA=false`
 - `RAG_WEB_SEARCH_ENGINE=searxng`
 - `SEARXNG_QUERY_URL=http://searxng:8080/search?q=<query>&format=json`
+- SearXNG is built from `Dockerfile.searxng`, which copies
+  `config/searxng/settings.yml` and enables `search.formats: [html, json]`
 
 You can tune result fan-out in `.env` (see `.env.example`):
 
@@ -346,9 +362,11 @@ docker compose build --no-cache opencode
 docker compose up -d --force-recreate --no-deps opencode
 ```
 
-The rebuild is required whenever you change `config/opencode.json`,
+The opencode rebuild is required whenever you change `config/opencode.json`,
 `config/package.json`, `config/webui-proxy.js`, `docker-entrypoint.sh`, or
 files in `config/tools/` because they are baked into the `opencode` image.
+Rebuild `searxng` whenever you change `Dockerfile.searxng` or
+`config/searxng/settings.yml`.
 
 Then verify inside the running container:
 
@@ -402,13 +420,17 @@ docker compose exec ollama ollama list
 # Pull an additional model
 docker compose exec ollama ollama pull <model>
 
-# Rebuild the opencode image after a config change
+# Rebuild opencode after opencode config/proxy/tool changes
 docker compose build opencode
-docker compose up -d opencode
+docker compose up -d --force-recreate --no-deps opencode
 
 # Rebuild/restart web search components after SearXNG config changes
 docker compose build searxng
-docker compose up -d searxng open-webui
+docker compose up -d --force-recreate searxng open-webui opencode
+
+# Rebuild both services after proxy/search changes
+docker compose build searxng opencode
+docker compose up -d --force-recreate searxng open-webui opencode
 
 # Restart the opencode server
 docker compose restart opencode
@@ -454,7 +476,7 @@ and recreate the `searxng` service. The custom SearXNG image bakes in
 
 ```bash
 docker compose build searxng
-docker compose up -d --no-deps searxng
+docker compose up -d --force-recreate searxng open-webui opencode
 ```
 
 For opencode sessions, also inspect the `opencode` logs. On startup the proxy
@@ -473,7 +495,7 @@ proxy and tool-schema stripping are baked into the container:
 
 ```bash
 docker compose build opencode
-docker compose up -d --no-deps opencode
+docker compose up -d --force-recreate --no-deps opencode
 ```
 
 Then confirm `OPENWEBUI_API_KEY` is set in `.env` and
@@ -533,6 +555,13 @@ The `ollama` service also sets:
 | `SEARXNG_QUERY_URL` | `http://searxng:8080/search?q=<query>&format=json` | Internal SearXNG query URL used by Open WebUI. |
 | `ENABLE_COMMUNITY_SHARING` | `False` | Disables outbound calls to the Open WebUI community hub, keeping all traffic on the local network. |
 | `ENABLE_TELEMETRY` | `false` | Disables telemetry to avoid unnecessary latency on outbound connections. |
+
+### SearXNG
+
+SearXNG is built from `Dockerfile.searxng` instead of using the upstream image
+directly. The custom image copies `config/searxng/settings.yml` into
+`/etc/searxng/settings.yml` so JSON search output is allowed. Without this,
+requests to `/search?...&format=json` can fail with `403 Forbidden`.
 
 ### Tips
 
