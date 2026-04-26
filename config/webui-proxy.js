@@ -10,6 +10,7 @@ const { URL } = require('url');
 
 const UPSTREAM = process.env.OPENWEBUI_URL || 'http://open-webui:8080';
 const PORT = 8090;
+const PROXY_VERSION = 'search-inject-v2';
 const SEARCH_RESULT_COUNT = parseInt(process.env.RAG_WEB_SEARCH_RESULT_COUNT || '5', 10);
 const SEARXNG_URL = process.env.OPENCODE_SEARXNG_URL || 'http://searxng:8080';
 
@@ -69,6 +70,17 @@ function latestUserMessage(json) {
   return '';
 }
 
+function latestUserMessageIndex(json) {
+  if (!Array.isArray(json.messages)) return -1;
+
+  for (let index = json.messages.length - 1; index >= 0; index -= 1) {
+    const message = json.messages[index];
+    if (message && message.role === 'user') return index;
+  }
+
+  return -1;
+}
+
 function shouldSearchWeb(query) {
   return /\b(search|web|internet|latest|current|today|recent|version|release|published|npm)\b/i.test(query);
 }
@@ -100,20 +112,33 @@ async function searchWeb(query) {
 function addSearchContext(json, query, results) {
   if (!Array.isArray(json.messages) || results.length === 0) return;
 
-  json.messages.unshift({
-    role: 'system',
-    content: [
-      `Web search results for "${query}":`,
-      '',
-      ...results.map(result => [
-        `${result.rank}. ${result.title}`,
-        `URL: ${result.url || '(no URL)'}`,
-        `Snippet: ${result.snippet || 'No snippet available.'}`,
-      ].join('\n')),
-      '',
-      'Use these search results to answer the user. If the results are insufficient, say what is missing.',
-    ].join('\n'),
-  });
+  const context = [
+    '',
+    '',
+    'Use the following live web search results to answer this request directly:',
+    `Search query: ${query}`,
+    '',
+    ...results.map(result => [
+      `${result.rank}. ${result.title}`,
+      `URL: ${result.url || '(no URL)'}`,
+      `Snippet: ${result.snippet || 'No snippet available.'}`,
+    ].join('\n')),
+    '',
+    'Answer from these results. Do not say to check npm manually unless the results are insufficient.',
+  ].join('\n');
+
+  const index = latestUserMessageIndex(json);
+  if (index === -1) return;
+
+  const message = json.messages[index];
+  if (typeof message.content === 'string') {
+    message.content += context;
+    return;
+  }
+
+  if (Array.isArray(message.content)) {
+    message.content.push({ type: 'text', text: context });
+  }
 }
 
 function filterOpenAIEvent(event) {
@@ -182,6 +207,7 @@ http.createServer((clientReq, clientRes) => {
           try {
             const results = await searchWeb(query);
             addSearchContext(json, query, results);
+            process.stdout.write(`webui-proxy: injected ${results.length} SearXNG results for "${query.slice(0, 120)}"\n`);
           } catch (err) {
             process.stderr.write(`webui-proxy: SearXNG search failed: ${err.message}\n`);
           }
@@ -230,5 +256,5 @@ http.createServer((clientReq, clientRes) => {
     clientRes.end(`Request error: ${err.message}`);
   });
 }).listen(PORT, '127.0.0.1', () => {
-  process.stdout.write(`webui-proxy: localhost:${PORT} -> ${UPSTREAM}\n`);
+  process.stdout.write(`webui-proxy ${PROXY_VERSION}: localhost:${PORT} -> ${UPSTREAM}; searxng=${SEARXNG_URL}\n`);
 });
