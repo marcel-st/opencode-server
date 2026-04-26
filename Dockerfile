@@ -23,7 +23,8 @@ RUN mkdir -p /home/opencode/.config/opencode \
              /home/opencode/.local/share/opencode \
     && chown -R opencode:opencode /home/opencode
 
-COPY --chown=opencode:opencode docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+COPY config/webui-proxy.js /usr/local/bin/webui-proxy.js
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 COPY --chown=opencode:opencode config/opencode.json /home/opencode/.config/opencode/opencode.json
