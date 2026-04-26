@@ -11,7 +11,7 @@
       "npm": "@ai-sdk/openai-compatible",
       "name": "Open WebUI",
       "options": {
-        "baseURL": "http://open-webui:8080/openai",
+        "baseURL": "http://open-webui:8080/api",
         "apiKey": "${OPENWEBUI_API_KEY}"
       },
       "models": {
