@@ -1,4 +1,4 @@
-FROM node:25-bookworm-slim
+FROM node:26-bookworm-slim
 
 # Configure the opencode CLI version at build time. Using latest by default
 # avoids older releases that can differ from current tool behavior docs.
